@@ -1,0 +1,55 @@
+---
+description: PromptPerfect project standards + merged implementation patterns
+alwaysApply: true
+---
+
+# PromptPerfect — Project Standards (Merged)
+
+## Tech Stack
+- Next.js App Router, TypeScript strict mode
+- Tailwind CSS + shadcn/ui for all styling
+- Vercel AI SDK for streaming LLM responses
+- Gemini as default backend (via `@ai-sdk/google`), with BYOK support for OpenAI/Anthropic
+- Supabase for feedback tracking and analytics
+
+## Architecture — Evolvability First
+- System prompts live in `lib/prompts.ts` as **named exports**. Adding a new mode = adding one export. Never hardcode prompts in routes/components.
+- Provider logic lives in `lib/providers.ts`. Switching models/providers = changing one line; keep a single unified interface.
+- The API route at `app/api/optimize/route.ts` accepts `mode` and `provider` as params. The frontend controls which mode/provider.
+- **Output contract**: the model returns **optimized prompt + explanation** in one response, separated by the delimiter `---EXPLANATION---`. Frontend parses and splits to avoid a second call.
+  - Backward compatibility: tolerate `---EXPLANATIONS---` from older/3rd-party implementations when parsing.
+- **Streaming-first with safe fallback**: prefer streaming responses, but provide a sync fallback endpoint/flag for reliability and easier error handling.
+
+## LLM Integration Patterns (Merged Learnings)
+- **Model fallback**: maintain an ordered list of model IDs to try (fast/cheap → more capable), and retry on transient errors (rate limits/quota/404 model not found).
+- **Streaming transport**:
+  - Use the Vercel AI SDK streaming utilities on the Next.js route.
+  - Stream in a way the client can incrementally render, and always send a clear completion signal.
+- **BYOK & secrets**:
+  - Server-side key (Gemini) comes from env vars and is never exposed.
+  - BYOK keys may pass from `localStorage` → request body → provider call, but are **never persisted** server-side and never logged.
+- **Provider parity**: every provider implementation must support the same request shape and output contract (delimiter + explanation section).
+
+## Feedback & Analytics
+- Feedback flows to Supabase `optimization_logs` table.
+- Log only metadata (mode/provider/model id, timings, token counts if available). Never store raw API keys.
+
+## Code Style
+- Functional components, TypeScript interfaces for all props
+- Named exports only (no default exports except pages)
+- `'use client'` only when component needs browser APIs or hooks
+- Files under 150 lines. One component per file.
+- Early returns for error handling (guard clauses)
+
+## Testing
+- Use Vitest for unit tests, React Testing Library for component tests
+- Test files live next to source: `ComponentName.test.tsx`
+- Every hook and utility function gets unit tests
+- Every API route gets integration tests (including delimiter parsing + streaming completion)
+
+## Do NOT
+- Install a database ORM — use Supabase client directly
+- Add authentication (it's open to everyone)
+- Install Monaco editor or any heavy editor library
+- Use Context/Redux — component-level state is fine for MVP
+

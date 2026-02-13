@@ -1,24 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+PromptPerfect is a Next.js app that **rewrites prompts** into a clearer, more effective version and returns a short explanation of what changed.
 
 ## Getting Started
 
-First, run the development server:
+### Setup
+
+1) Copy env file
+
+```bash
+cp .env.example .env
+```
+
+2) Add at least one server key (recommended):
+- `GOOGLE_API_KEY` (Gemini)
+
+Optional (for analytics logging from the browser):
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### Run dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **v2 streaming**: `POST /api/optimize`
+  - Streams plain text output that contains:
+    - optimized prompt text
+    - delimiter `---EXPLANATION---`
+    - bullet explanations
+- **v1 sync fallback**: `POST /api/optimize-sync`
+  - Returns JSON:
+    - `optimizedText`
+    - `explanation`
+    - `rawText`
+
+Both versions accept:
+
+```json
+{
+  "prompt": "string",
+  "mode": "developer | research | beginner | product | marketing",
+  "provider": "google",
+  "apiKey": "optional BYOK key",
+  "model": "optional model override"
+}
+```
+
+## Old + New versions
+
+- The **new app** is on `/` (PromptPerfect UI).
+- The original starter page is preserved at `/legacy`.
+
+## Security / What to hide
+
+- **Never commit**: `.env` (and any `.env*` files containing keys), API keys, tokens, service-role keys.
+- **Never log**: `apiKey` from requests. (This app does not persist keys server-side.)
+- **Safe to commit**: `.env.example` with empty values only.
 
 ## Learn More
 

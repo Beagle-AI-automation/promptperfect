@@ -1,9 +1,9 @@
 ---
-description: PromptPerfect project standards and evolvability patterns
-alwaysApply: true
+description: PromptPerfect project standards (legacy v1)
+alwaysApply: false
 ---
 
-# PromptPerfect — Project Standards
+# PromptPerfect — Project Standards (Legacy v1)
 
 ## Tech Stack
 - Next.js 14 App Router, TypeScript strict mode
@@ -39,3 +39,4 @@ alwaysApply: true
 - Add authentication (it's open to everyone)
 - Install Monaco editor or any heavy editor library
 - Use Context/Redux — component-level state is fine for MVP
+
