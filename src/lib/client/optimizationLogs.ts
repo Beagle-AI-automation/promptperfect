@@ -2,6 +2,7 @@ import type { Mode, OptimizeVersion } from '@/lib/types';
 import { getSupabaseClient } from './supabase';
 
 export interface OptimizationLogInsert {
+  session_id: string;
   mode: Mode;
   version: OptimizeVersion;
   provider: 'google';

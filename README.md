@@ -17,6 +17,14 @@ Optional (for analytics logging from the browser):
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
+3) If using Supabase:
+
+   Run the migration in your Supabase project → SQL Editor (or `supabase db push`):
+
+   ```sql
+   -- See supabase/migrations/20250218000000_create_optimization_logs.sql
+   ```
+
 ### Run dev server
 
 ```bash

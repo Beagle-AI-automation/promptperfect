@@ -3,6 +3,8 @@ import type { Mode, ProviderId } from '@/lib/types';
 export interface OptimizeApiArgs {
   prompt: string;
   mode: Mode;
+  session_id?: string;
+  version?: 'v1' | 'v2';
   provider: ProviderId;
   apiKey?: string;
   model?: string;
@@ -12,6 +14,7 @@ export interface OptimizeApiArgs {
 export interface OptimizeSyncResult {
   optimizedText: string;
   explanation: string;
+  changes: string;
   rawText: string;
   provider: ProviderId;
   model: string;
@@ -45,6 +48,8 @@ export async function postOptimizeSync(args: OptimizeApiArgs): Promise<OptimizeS
     body: JSON.stringify({
       prompt: args.prompt.trim(),
       mode: args.mode,
+      session_id: args.session_id?.trim() || undefined,
+      version: args.version,
       provider: args.provider,
       apiKey: trimOrUndefined(args.apiKey),
       model: trimOrUndefined(args.model),
@@ -67,6 +72,8 @@ export async function postOptimizeStream(args: OptimizeApiArgs): Promise<{
     body: JSON.stringify({
       prompt: args.prompt.trim(),
       mode: args.mode,
+      session_id: args.session_id?.trim() || undefined,
+      version: args.version,
       provider: args.provider,
       apiKey: trimOrUndefined(args.apiKey),
       model: trimOrUndefined(args.model),

@@ -1,11 +1,14 @@
-import { EXPLANATION_DELIMITER } from './delimiter';
+import { CHANGES_DELIMITER, EXPLANATION_DELIMITER } from './delimiter';
 import type { Mode } from './types';
 
 function explanationRule(): string {
   return [
     `After the improved prompt, output a newline, then exactly: ${EXPLANATION_DELIMITER}`,
-    `Then output a short bullet list explaining what you improved and why.`,
-    `Keep explanations concise and actionable.`,
+    `Then output a detailed explanation of the optimized prompt: what it means, what it achieves, and how it is structured.`,
+    `Use 1–3 paragraphs. Be thorough and helpful.`,
+    `Then output a newline, then exactly: ${CHANGES_DELIMITER}`,
+    `Then output a short bullet list of what changed from the original prompt to the optimized one. Start each line with "- " or "* ".`,
+    `Keep the change list concise and actionable.`,
   ].join('\n');
 }
 

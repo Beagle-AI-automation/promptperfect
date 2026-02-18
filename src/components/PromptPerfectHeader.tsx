@@ -30,11 +30,7 @@ export function PromptPerfectHeader() {
         </div>
       </div>
       <p className="max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Paste a messy prompt, get a cleaner one back plus a short explanation separated by{' '}
-        <code className="rounded-md border border-zinc-200 bg-white/70 px-1.5 py-0.5 text-[12px] text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-200">
-          ---EXPLANATION---
-        </code>
-        .
+        Paste a messy prompt, get a cleaner one back plus a short explanation
       </p>
     </header>
   );

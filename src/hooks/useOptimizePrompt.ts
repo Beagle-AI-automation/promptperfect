@@ -23,7 +23,9 @@ async function safeLogOptimization(insert: OptimizationLogInsert) {
 interface OptimizeState {
   optimizedText: string;
   explanation: string;
+  changes: string;
   rawText: string;
+  sessionId: string;
   provider: ProviderId;
   model: string;
   isLoading: boolean;
@@ -32,11 +34,17 @@ interface OptimizeState {
 
 const DEFAULT_PROVIDER: ProviderId = 'google';
 
+function generateSessionId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 function initialState(): OptimizeState {
   return {
     optimizedText: '',
     explanation: '',
+    changes: '',
     rawText: '',
+    sessionId: '',
     provider: DEFAULT_PROVIDER,
     model: '',
     isLoading: false,
@@ -70,11 +78,14 @@ export function useOptimizePrompt() {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const sessionId = generateSessionId();
       setState((s) => ({
         ...s,
         optimizedText: '',
         explanation: '',
+        changes: '',
         rawText: '',
+        sessionId,
         provider: args.provider,
         model: '',
         isLoading: true,
@@ -86,6 +97,8 @@ export function useOptimizePrompt() {
           const data = await postOptimizeSync({
             prompt,
             mode: args.mode,
+            session_id: sessionId,
+            version: 'v1',
             provider: args.provider,
             apiKey: args.apiKey,
             model: args.model,
@@ -96,6 +109,7 @@ export function useOptimizePrompt() {
             ...s,
             optimizedText: data.optimizedText,
             explanation: data.explanation,
+            changes: data.changes,
             rawText: data.rawText,
             provider: data.provider ?? s.provider,
             model: data.model ?? '',
@@ -103,13 +117,14 @@ export function useOptimizePrompt() {
           }));
 
           void safeLogOptimization({
+            session_id: sessionId,
             mode: args.mode,
             version: 'v1',
             provider: 'google',
             model: data.model ?? '',
             prompt_length: prompt.length,
             optimized_length: data.optimizedText.length,
-            explanation_length: data.explanation.length,
+            explanation_length: data.explanation.length + data.changes.length,
           });
 
           return;
@@ -118,6 +133,8 @@ export function useOptimizePrompt() {
         const { provider, model, reader } = await postOptimizeStream({
           prompt,
           mode: args.mode,
+          session_id: sessionId,
+          version: 'v2',
           provider: args.provider,
           apiKey: args.apiKey,
           model: args.model,
@@ -128,26 +145,28 @@ export function useOptimizePrompt() {
 
         await readUint8Stream(reader, (chunkText) => {
           buffer += chunkText;
-          const { optimizedText, explanation } = splitOptimizedOutput(buffer);
+          const { optimizedText, explanation, changes } = splitOptimizedOutput(buffer);
           setState((s) => ({
             ...s,
             rawText: buffer,
             optimizedText,
             explanation,
+            changes,
             provider,
             model,
           }));
         });
 
-        const { optimizedText, explanation } = splitOptimizedOutput(buffer);
+        const { optimizedText, explanation, changes } = splitOptimizedOutput(buffer);
         void safeLogOptimization({
+          session_id: sessionId,
           mode: args.mode,
           version: 'v2',
           provider: 'google',
           model,
           prompt_length: prompt.length,
           optimized_length: optimizedText.length,
-          explanation_length: explanation.length,
+          explanation_length: explanation.length + changes.length,
         });
 
         setState((s) => ({ ...s, isLoading: false }));

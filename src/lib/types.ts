@@ -7,6 +7,8 @@ export type OptimizeVersion = 'v1' | 'v2';
 export interface OptimizeRequest {
   prompt: string;
   mode: Mode;
+  session_id?: string;
+  version?: OptimizeVersion;
   provider?: ProviderId;
   /**
    * Optional BYOK key. Never persisted server-side.

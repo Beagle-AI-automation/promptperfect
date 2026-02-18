@@ -27,6 +27,8 @@ export function PromptPerfectApp() {
   const {
     optimizedText,
     explanation,
+    changes,
+    sessionId,
     provider: usedProvider,
     model: usedModel,
     isLoading,
@@ -122,6 +124,9 @@ export function PromptPerfectApp() {
           <PromptPerfectOutputs
             optimizedText={optimizedText}
             explanation={explanation}
+            changes={changes}
+            sessionId={sessionId}
+            mode={mode}
             isLoading={isLoading}
           />
         </div>

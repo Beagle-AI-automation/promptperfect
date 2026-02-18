@@ -8,7 +8,8 @@ import {
   isRetryableProviderError,
   resolveModelList,
 } from '@/lib/providers';
-import type { Mode, OptimizeRequest, ProviderId } from '@/lib/types';
+import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import type { Mode, OptimizeRequest, OptimizeVersion, ProviderId } from '@/lib/types';
 
 function isMode(value: unknown): value is Mode {
   return (
@@ -62,11 +63,30 @@ export async function POST(req: NextRequest) {
         });
 
         const rawText = result.text ?? '';
-        const { optimizedText, explanation } = splitOptimizedOutput(rawText);
+        const { optimizedText, explanation, changes } = splitOptimizedOutput(rawText);
+
+        const sessionId = typeof body.session_id === 'string' ? body.session_id.trim() : '';
+        const version = (body.version === 'v1' || body.version === 'v2' ? body.version : 'v1') as OptimizeVersion;
+        if (sessionId) {
+          const supabase = getSupabaseAdminClient();
+          if (supabase) {
+            void supabase.from('optimization_logs').insert({
+              session_id: sessionId,
+              mode,
+              version,
+              provider: 'google',
+              model: modelId,
+              prompt_length: prompt.length,
+              optimized_length: optimizedText.length,
+              explanation_length: explanation.length + changes.length,
+            });
+          }
+        }
 
         return Response.json({
           optimizedText,
           explanation,
+          changes,
           rawText,
           provider,
           model: modelId,

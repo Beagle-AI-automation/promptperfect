@@ -24,6 +24,11 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 /* Minimal-but-"crazy": subtle depth without clutter */
 body::before {
   content: "";
