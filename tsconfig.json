@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node", "react", "react-dom", "react/jsx-runtime"],
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
