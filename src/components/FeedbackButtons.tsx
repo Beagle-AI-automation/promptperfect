@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
 interface FeedbackButtonsProps {
@@ -16,6 +16,11 @@ export function FeedbackButtons({
 }: FeedbackButtonsProps) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSubmitted(false);
+    setError(null);
+  }, [sessionId]);
 
   const sendFeedback = async (rating: 'up' | 'down') => {
     if (!sessionId || submitted) return;
