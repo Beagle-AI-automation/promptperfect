@@ -13,8 +13,9 @@ export interface ProviderConfig {
 export function createProvider(providerId: Provider, apiKey?: string): ProviderConfig {
   switch (providerId) {
     case 'gemini': {
-      const key = process.env.GOOGLE_API_KEY;
-      if (!key) throw new Error('GOOGLE_API_KEY is not set');
+      // Support both names (Vercel / some docs use GEMINI_API_KEY)
+      const key = (process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY ?? '').trim();
+      if (!key) throw new Error('GOOGLE_API_KEY is not set. Add it in Vercel → Settings → Environment Variables, then redeploy.');
       const google = createGoogleGenerativeAI({ apiKey: key });
       return { model: google('gemini-2.0-flash'), modelId: 'gemini-2.0-flash' };
     }

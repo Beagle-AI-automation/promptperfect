@@ -9,7 +9,9 @@ export async function GET() {
 
   const serviceKey =
     process.env.SUPABASE_SERVICE_KEY?.trim() ?? process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const googleKey = (process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY ?? '').trim();
   const result: Record<string, unknown> = {
+    googleApiKeySet: !!googleKey,
     supabaseConfigured: !!(url && (key || serviceKey)),
     urlPresent: !!url,
     anonKeyPresent: !!key,
