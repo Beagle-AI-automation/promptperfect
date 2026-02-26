@@ -26,16 +26,12 @@ export function FeedbackButtons({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-<<<<<<< HEAD
-  const sendFeedback = async (feedback: 'up' | 'down') => {
-=======
   useEffect(() => {
     setSubmitted(false);
     setError(null);
   }, [sessionId]);
 
-  const sendFeedback = async (rating: 'up' | 'down') => {
->>>>>>> f09c6ebb8b21f827d0ae7b0d641f4037c0af75ac
+  const sendFeedback = async (feedback: 'up' | 'down') => {
     if (!sessionId || submitted) return;
     setError(null);
     try {
