@@ -2,7 +2,6 @@ import { streamText } from 'ai';
 import type { NextRequest } from 'next/server';
 import { getSystemPrompt } from '@/lib/prompts';
 import { createProvider } from '@/lib/providers';
-import { getSupabaseClient } from '@/lib/supabase';
 import type { OptimizeRequest, OptimizationMode, Provider } from '@/lib/types';
 
 const MODES: OptimizationMode[] = ['better', 'specific', 'cot'];
@@ -35,7 +34,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { model, modelId } = createProvider(provider, apiKey);
+    const { model } = createProvider(provider, apiKey);
     const system = getSystemPrompt(mode);
 
     const sessionId =
@@ -51,21 +50,6 @@ export async function POST(req: NextRequest) {
       system,
       prompt,
     });
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      const { error } = await supabase.from('optimization_logs').insert({
-        session_id: sessionId,
-        mode,
-        provider,
-        model: modelId,
-        prompt_length: prompt.length,
-      });
-      if (error) {
-        console.error('[optimize] Supabase insert failed:', error.message);
-      } else if (process.env.NODE_ENV === 'development') {
-        console.log('[optimize] Insert OK for session', sessionId.slice(0, 8) + '…');
-      }
-    }
 
     const response = result.toTextStreamResponse({
       headers: {

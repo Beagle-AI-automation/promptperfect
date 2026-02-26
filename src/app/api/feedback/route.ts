@@ -1,51 +1,73 @@
-import type { NextRequest } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = (await req.json()) as { session_id?: string; rating?: string };
-    const sessionId = typeof body.session_id === 'string' ? body.session_id.trim() : '';
-    const rating = body.rating === 'up' || body.rating === 'down' ? body.rating : null;
+export const runtime = 'nodejs';
 
-    if (!sessionId || !rating) {
-      return Response.json({ error: 'session_id and rating (up/down) required' }, { status: 400 });
-    }
+function isMissingColumnError(message: string): boolean {
+  // PostgREST schema cache message for unknown columns, e.g.:
+  // "Could not find the 'feedback' column of 'optimization_logs' in the schema cache"
+  return /Could not find the '.*' column of 'optimization_logs' in the schema cache/i.test(message);
+}
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return Response.json({ error: 'Supabase not configured' }, { status: 500 });
-    }
-
-    const { data, error } = await supabase
-      .from('optimization_logs')
-      .update({ rating: rating === 'up' ? 1 : -1 })
-      .eq('session_id', sessionId)
-      .select('id');
-
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data?.length) {
-      const { count } = await supabase
-        .from('optimization_logs')
-        .select('*', { count: 'exact', head: true });
-      const hint =
-        count === 0
-          ? 'Table is empty — the optimize route may not be inserting. Check server logs for "[optimize] Supabase insert failed".'
-          : `Table has ${count} row(s) but none match session_id. The session_id from the client may not be reaching the optimize API.`;
-      return Response.json(
-        {
-          error: 'Session not found.',
-          hint,
-          debugUrl: '/api/debug',
-        },
-        { status: 404 },
-      );
-    }
-
-    return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: 'Invalid request' }, { status: 400 });
+export async function POST(req: Request) {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_KEY?.trim();
+  if (!url || !key) {
+    return Response.json({ error: 'Supabase not configured' }, { status: 500 });
   }
+  const supabase = createClient(url, key);
+
+  const {
+    mode,
+    provider,
+    inputLength,
+    outputLength,
+    feedback,
+    sessionId,
+  } = (await req.json()) as {
+    mode?: string;
+    provider?: string;
+    inputLength?: number;
+    outputLength?: number;
+    feedback?: string;
+    sessionId?: string;
+  };
+
+  if (!mode || typeof mode !== 'string') {
+    return Response.json({ error: 'mode is required' }, { status: 400 });
+  }
+  if (!feedback || typeof feedback !== 'string') {
+    return Response.json({ error: 'feedback is required' }, { status: 400 });
+  }
+
+  // Normalize mode to match Supabase check constraint: only 'better' | 'specific' | 'cot'
+  const ALLOWED_MODES = ['better', 'specific', 'cot'] as const;
+  const normalizedMode = ALLOWED_MODES.includes(mode.toLowerCase() as (typeof ALLOWED_MODES)[number])
+    ? (mode.toLowerCase() as (typeof ALLOWED_MODES)[number])
+    : 'better';
+
+  const primary = await supabase.from('optimization_logs').insert({
+    mode: normalizedMode,
+    provider,
+    input_length: inputLength,
+    output_length: outputLength,
+    feedback,
+    session_id: sessionId,
+  });
+
+  if (primary.error) {
+    // Backward-compatible fallback if the table schema is still the older shape.
+    if (isMissingColumnError(primary.error.message)) {
+      const legacy = await supabase.from('optimization_logs').insert({
+        session_id: sessionId,
+        mode: normalizedMode,
+        provider,
+        prompt_length: inputLength,
+        rating: feedback === 'up' ? 1 : -1,
+      });
+      if (legacy.error) return Response.json({ error: legacy.error.message }, { status: 500 });
+      return Response.json({ success: true, legacy: true });
+    }
+    return Response.json({ error: primary.error.message }, { status: 500 });
+  }
+  return Response.json({ success: true });
 }

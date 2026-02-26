@@ -13,6 +13,14 @@ import { StatsBar } from '@/components/StatsBar';
 import type { OptimizationMode, Provider } from '@/lib/types';
 
 const STORAGE_KEY = 'promptperfect:apikey';
+const EXPLANATION_DELIMITER = '---EXPLANATION---';
+const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
+
+function getOptimizedPromptText(fullText: string): string {
+  const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
+  const beforeExplanation = explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
+  return beforeExplanation.replace(SCORE_PATTERN, '').trim();
+}
 
 function generateSessionId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -42,6 +50,11 @@ export default function Home() {
   const [apiKey, setApiKey] = useState('');
   const [explanation, setExplanation] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [runMeta, setRunMeta] = useState<{
+    mode: OptimizationMode;
+    provider: Provider;
+    inputLength: number;
+  } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [statsRefresh, setStatsRefresh] = useState(0);
 
@@ -78,9 +91,11 @@ export default function Home() {
   const handleOptimize = useCallback(() => {
     if (!inputText.trim()) return;
     const sid = generateSessionId();
+    const trimmed = inputText.trim();
     setExplanation('');
     setSessionId(sid);
-    complete(inputText.trim(), {
+    setRunMeta({ mode: selectedMode, provider, inputLength: trimmed.length });
+    complete(trimmed, {
       body: {
         mode: selectedMode,
         provider,
@@ -124,6 +139,19 @@ export default function Home() {
                   : undefined
               }
             />
+            {completion && !isLoading && (
+              <div className="flex justify-end">
+                <FeedbackButtons
+                  sessionId={sessionId}
+                  mode={runMeta?.mode ?? selectedMode}
+                  provider={runMeta?.provider ?? provider}
+                  inputLength={runMeta?.inputLength ?? inputText.trim().length}
+                  outputLength={getOptimizedPromptText(completion).length}
+                  disabled={false}
+                  onSubmitted={() => setStatsRefresh((n) => n + 1)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -152,11 +180,6 @@ export default function Home() {
 
           <div className="mt-6 space-y-4">
             <ExplanationPanel explanation={explanation} />
-            <FeedbackButtons
-              sessionId={sessionId}
-              disabled={!completion || isLoading}
-              onSubmitted={() => setStatsRefresh((n) => n + 1)}
-            />
           </div>
         </div>
       </main>

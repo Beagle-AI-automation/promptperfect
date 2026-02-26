@@ -1,5 +1,4 @@
 import type { NextRequest } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,21 +16,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return Response.json({ error: 'Supabase not configured' }, { status: 500 });
-    }
-
-    const { error } = await supabase
-      .from('optimization_logs')
-      .update({ prompt_score: score })
-      .eq('session_id', sessionId);
-
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-
-    return Response.json({ ok: true });
+    // PP-204 schema does not include a score column; accept but don't persist.
+    return Response.json({ ok: true, skipped: true, session_id: sessionId, score });
   } catch {
     return Response.json({ error: 'Invalid request' }, { status: 400 });
   }

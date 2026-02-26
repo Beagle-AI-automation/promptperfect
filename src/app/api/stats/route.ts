@@ -16,25 +16,18 @@ export async function GET() {
   try {
     const { data: logs, error } = await supabase
       .from('optimization_logs')
-      .select('mode, provider, rating, prompt_score');
+      .select('*');
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
     const total = logs?.length ?? 0;
-    const thumbsUp = logs?.filter((r) => r.rating === 1).length ?? 0;
-    const thumbsDown = logs?.filter((r) => r.rating === -1).length ?? 0;
-    const scoresWithValue = (logs ?? []).filter(
-      (r) => typeof r.prompt_score === 'number' && r.prompt_score >= 1 && r.prompt_score <= 100,
-    );
-    const avgScore =
-      scoresWithValue.length > 0
-        ? Math.round(
-            scoresWithValue.reduce((s, r) => s + (r.prompt_score ?? 0), 0) /
-              scoresWithValue.length,
-          )
-        : null;
+    const thumbsUp =
+      logs?.filter((r) => r.feedback === 'up' || r.rating === 1).length ?? 0;
+    const thumbsDown =
+      logs?.filter((r) => r.feedback === 'down' || r.rating === -1).length ?? 0;
+    const avgScore = null;
     const byMode = (logs ?? []).reduce(
       (acc, r) => {
         const m = r.mode ?? 'unknown';
