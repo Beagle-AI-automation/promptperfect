@@ -19,6 +19,7 @@ export async function GET() {
       .select('*');
 
     if (error) {
+      console.error('[Stats API] Error fetching logs:', error);
       return Response.json({ error: error.message }, { status: 500 });
     }
 
@@ -53,7 +54,8 @@ export async function GET() {
       byMode,
       byProvider,
     });
-  } catch {
+  } catch (err) {
+    console.error('[Stats API] Unexpected error:', err);
     return Response.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 }
