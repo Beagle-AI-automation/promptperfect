@@ -4,7 +4,7 @@ import { getSystemPrompt } from '@/lib/prompts';
 import { createProvider } from '@/lib/providers';
 import type { OptimizeRequest, OptimizationMode, Provider } from '@/lib/types';
 
-const MODES: OptimizationMode[] = ['better', 'specific', 'cot'];
+const MODES: OptimizationMode[] = ['better', 'specific', 'cot', 'developer', 'research', 'beginner', 'product', 'marketing'];
 const PROVIDERS: Provider[] = ['gemini', 'openai', 'anthropic'];
 
 function isMode(v: unknown): v is OptimizationMode {

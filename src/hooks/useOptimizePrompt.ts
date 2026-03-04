@@ -32,7 +32,7 @@ interface OptimizeState {
   error: string | null;
 }
 
-const DEFAULT_PROVIDER: ProviderId = 'google';
+const DEFAULT_PROVIDER: ProviderId = 'gemini';
 
 function generateSessionId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -120,7 +120,7 @@ export function useOptimizePrompt() {
             session_id: sessionId,
             mode: args.mode,
             version: 'v1',
-            provider: 'google',
+            provider: data.provider ?? 'gemini',
             model: data.model ?? '',
             prompt_length: prompt.length,
             optimized_length: data.optimizedText.length,
@@ -162,7 +162,7 @@ export function useOptimizePrompt() {
           session_id: sessionId,
           mode: args.mode,
           version: 'v2',
-          provider: 'google',
+          provider,
           model,
           prompt_length: prompt.length,
           optimized_length: optimizedText.length,

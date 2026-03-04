@@ -43,8 +43,13 @@ export const EXPLANATION_DELIMITER = '---EXPLANATION---';
 export function getSystemPrompt(mode: string): string {
   switch (mode) {
     case 'better':
+    case 'developer':
+    case 'beginner':
+    case 'marketing':
       return BETTER_PROMPT;
     case 'specific':
+    case 'research':
+    case 'product':
       return SPECIFIC_PROMPT;
     case 'cot':
       return COT_PROMPT;

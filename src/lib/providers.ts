@@ -33,3 +33,16 @@ export function createProvider(providerId: Provider, apiKey?: string): ProviderC
       throw new Error(`Unknown provider: ${providerId}`);
   }
 }
+
+export function hasServerKey(providerId: Provider): boolean {
+  switch (providerId) {
+    case 'gemini':
+      return !!(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY);
+    case 'openai':
+      return !!process.env.OPENAI_API_KEY;
+    case 'anthropic':
+      return !!process.env.ANTHROPIC_API_KEY;
+    default:
+      return false;
+  }
+}

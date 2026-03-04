@@ -1,6 +1,19 @@
-export type OptimizationMode = 'better' | 'specific' | 'cot';
+export type OptimizationMode = 
+  | 'better' 
+  | 'specific' 
+  | 'cot' 
+  | 'developer' 
+  | 'research' 
+  | 'beginner' 
+  | 'product' 
+  | 'marketing';
+
+export type Mode = OptimizationMode;
+
+export type OptimizeVersion = 'v1' | 'v2';
 
 export type Provider = 'gemini' | 'openai' | 'anthropic';
+export type ProviderId = Provider;
 
 export interface OptimizeRequest {
   prompt: string;
@@ -10,4 +23,5 @@ export interface OptimizeRequest {
   apiKey?: string;
   /** Client-generated session ID for feedback. */
   session_id?: string;
+  version?: OptimizeVersion;
 }

@@ -3,14 +3,18 @@
 import { ExplanationPanel } from '@/components/ExplanationPanel';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
 import { OutputCard } from '@/components/OutputCard';
+import type { OptimizationMode, Provider } from '@/lib/types';
 
 interface PromptPerfectOutputsProps {
   optimizedText: string;
   explanation: string;
   changes: string;
   sessionId: string;
-  mode: string;
+  mode: OptimizationMode;
   isLoading: boolean;
+  provider: Provider;
+  inputLength: number;
+  outputLength: number;
 }
 
 export function PromptPerfectOutputs(props: PromptPerfectOutputsProps) {
@@ -40,6 +44,9 @@ export function PromptPerfectOutputs(props: PromptPerfectOutputsProps) {
               sessionId={props.sessionId}
               mode={props.mode}
               disabled={props.isLoading}
+              provider={props.provider}
+              inputLength={props.inputLength}
+              outputLength={props.outputLength}
             />
           </div>
         )}

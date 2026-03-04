@@ -15,7 +15,7 @@ export function useApiConfig() {
       .then((data) => setConfig(data as ApiConfigResponse))
       .catch(() =>
         setConfig({
-          providers: { google: false },
+          providers: { gemini: false, openai: false, anthropic: false },
         }),
       );
   }, []);

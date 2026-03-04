@@ -13,7 +13,7 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useOptimizePrompt } from '@/hooks/useOptimizePrompt';
 import type { Mode, OptimizeVersion } from '@/lib/types';
 
-const PROVIDER = 'google' as const;
+const PROVIDER = 'gemini' as const;
 
 export function PromptPerfectApp() {
   const [prompt, setPrompt] = useState('');
@@ -22,7 +22,7 @@ export function PromptPerfectApp() {
   const [modelOverride, setModelOverride] = useState('');
 
   const { hasServerKey } = useApiConfig();
-  const keyState = useLocalStorageState('promptperfect:apiKey:google', '');
+  const keyState = useLocalStorageState('promptperfect:apiKey:gemini', '');
 
   const {
     optimizedText,
@@ -128,6 +128,9 @@ export function PromptPerfectApp() {
             sessionId={sessionId}
             mode={mode}
             isLoading={isLoading}
+            provider={usedProvider || PROVIDER}
+            inputLength={prompt.length}
+            outputLength={optimizedText.length}
           />
         </div>
       </div>

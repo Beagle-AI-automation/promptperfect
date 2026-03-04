@@ -1,11 +1,11 @@
-import type { Mode, OptimizeVersion } from '@/lib/types';
+import type { Mode, OptimizeVersion, Provider } from '@/lib/types';
 import { getSupabaseClient } from './supabase';
 
 export interface OptimizationLogInsert {
   session_id: string;
   mode: Mode;
   version: OptimizeVersion;
-  provider: 'google';
+  provider: Provider;
   model: string;
   prompt_length: number;
   optimized_length: number;
