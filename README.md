@@ -2,7 +2,9 @@
 
 > PromptPerfect is an open-source prompt optimization tool that automatically improves your LLM prompts and explains the changes.
 
-![PromptPerfect Screenshot](https://raw.githubusercontent.com/Beagle-AI-automation/promptperfect/main/public/screenshot.png)
+<img width="1899" height="912" alt="image" src="https://github.com/user-attachments/assets/79d8f61d-aab4-4f0d-a81f-85c2de4d75b8" />
+<img width="1902" height="890" alt="image" src="https://github.com/user-attachments/assets/f4af916b-ab2a-437f-8034-26e2c3c3e73e" />
+
 
 PromptPerfect takes your draft prompts—whether vague, messy, or just a rough idea—and transforms them into high-quality, engineered prompts using AI. It doesn't just rewrite them; it teaches you *why* the changes were made, helping you become a better prompt engineer over time. Choose from modes like "Make it Better," "Make it Specific," or "Add Chain-of-Thought" to get exactly the result you need.
 
