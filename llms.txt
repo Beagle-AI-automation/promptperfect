@@ -1,0 +1,19 @@
+# PromptPerfect
+> Open-source prompt optimization tool that automatically improves your LLM prompts and explains the changes. Supports GPT-4, Claude, and Gemini. Bring your own API key — it never leaves your browser.
+
+## Documentation
+- [Try PromptPerfect](https://promptperfect-xyz.vercel.app): Use it in your browser — no install needed
+- [GitHub](https://github.com/Beagle-AI-automation/promptperfect): Source code, setup instructions, contributing guide
+- [API Route](https://github.com/Beagle-AI-automation/promptperfect#api): POST /api/optimize endpoint docs
+
+## Optimization Modes
+- **Better**: General-purpose prompt improvement with explanations
+- **Specific**: Adds constraints, types, edge cases for technical prompts
+- **Chain-of-Thought**: Restructures prompts for step-by-step reasoning
+
+## Tech Stack
+- Next.js 14 (App Router)
+- Vercel AI SDK (streaming)
+- Tailwind CSS + shadcn/ui
+- Supabase (feedback tracking)
+- TypeScript
