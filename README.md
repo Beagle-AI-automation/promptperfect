@@ -92,6 +92,32 @@ We welcome contributions! Whether it's fixing bugs, improving documentation, or 
 4.  Push to the branch (`git push origin feature/amazing-feature`).
 5.  Open a Pull Request.
 
+## FAQ
+
+### What is PromptPerfect?
+
+PromptPerfect is an open-source prompt optimization tool. Paste any LLM prompt, pick an optimization mode, and get an improved version with explanations of what changed and why. It runs in your browser — no install needed.
+
+### What LLM providers does it work with?
+
+PromptPerfect supports OpenAI (GPT-4, GPT-3.5), Anthropic (Claude), and Google (Gemini). You bring your own API key. The key is sent directly from your browser to the provider — it never touches our servers.
+
+### Is my API key safe?
+
+Yes. Your API key is sent from your browser directly to the LLM provider's API. It is not stored, logged, or transmitted to any other server. You can verify this in the source code — the API route proxies the request without persisting the key.
+
+### How do I add a new optimization mode?
+
+Add a new prompt string to `lib/prompts.ts` and a corresponding option in the ModeSelector component. See CONTRIBUTING.md for the step-by-step guide.
+
+### How is this different from DSPy or PromptFoo?
+
+DSPy is a framework for programmatic prompt optimization in Python pipelines. PromptFoo is a CLI tool for evaluating and testing prompts. PromptPerfect is a web-based tool for manually improving individual prompts with explanations — more like Grammarly for prompts than a testing framework.
+
+### Can I deploy my own instance?
+
+Yes. Click the "Deploy with Vercel" button in this README. You'll need a Gemini API key (free from ai.google.dev). The whole setup takes under 5 minutes.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
