@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "types": ["node", "react", "react-dom", "react/jsx-runtime"],
     "target": "ES2017",
+    "baseUrl": ".",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
