@@ -84,6 +84,22 @@ export default function Home() {
     onFinish: () => {
       // Session ID already set before complete() call
     },
+    // Ensure 4xx/5xx (e.g. missing/invalid BYOK key) surface as errors so UI doesn't stay on "Optimizing..."
+    fetch: async (input, init) => {
+      const res = await fetch(input, init);
+      if (!res.ok) {
+        let msg = `Request failed: ${res.status}`;
+        try {
+          const text = await res.text();
+          const data = text ? (JSON.parse(text) as { error?: string }) : {};
+          if (typeof data?.error === 'string' && data.error.trim()) msg = data.error.trim();
+        } catch {
+          // keep default msg
+        }
+        throw new Error(msg);
+      }
+      return res;
+    },
   });
 
   useEffect(() => {
