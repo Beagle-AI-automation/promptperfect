@@ -40,58 +40,64 @@ export async function POST(req: NextRequest) {
     const mode = isMode(body.mode) ? body.mode : 'better';
     const provider = isProvider(body.provider) ? body.provider : 'gemini';
     const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : undefined;
-    
+
     let providerConfig;
     try {
-        providerConfig = createProvider(provider, apiKey);
+      providerConfig = createProvider(provider, apiKey);
     } catch (e) {
-         return Response.json({ error: (e as Error).message }, { status: 400, headers: corsHeaders });
+      return Response.json(
+        { error: (e as Error).message },
+        { status: 400, headers: corsHeaders }
+      );
     }
-    
+
     const { model, modelId } = providerConfig;
     const system = getSystemPrompt(mode);
 
     try {
-        const result = await generateText({
-          model,
-          system,
-          prompt,
-        });
+      const result = await generateText({
+        model,
+        system,
+        prompt,
+      });
 
-        const rawText = result.text ?? '';
-        const { optimizedText, explanation, changes } = splitOptimizedOutput(rawText);
+      const rawText = result.text ?? '';
+      const { optimizedText, explanation, changes } = splitOptimizedOutput(rawText);
 
-        const sessionId = typeof body.session_id === 'string' ? body.session_id.trim() : '';
-        const version = (body.version === 'v1' || body.version === 'v2' ? body.version : 'v1');
-        
-        if (sessionId) {
-          const supabase = getSupabaseAdminClient();
-          if (supabase) {
-            void supabase.from('optimization_logs').insert({
-              session_id: sessionId,
-              mode,
-              version,
-              provider,
-              model: modelId,
-              prompt_length: prompt.length,
-              optimized_length: optimizedText.length,
-              explanation_length: explanation.length + changes.length,
-            });
-          }
+      const sessionId = typeof body.session_id === 'string' ? body.session_id.trim() : '';
+      const version = body.version === 'v1' || body.version === 'v2' ? body.version : 'v1';
+
+      if (sessionId) {
+        const supabase = getSupabaseAdminClient();
+        if (supabase) {
+          void supabase.from('optimization_logs').insert({
+            session_id: sessionId,
+            mode,
+            version,
+            provider,
+            model: modelId,
+            prompt_length: prompt.length,
+            optimized_length: optimizedText.length,
+            explanation_length: explanation.length + changes.length,
+          });
         }
+      }
 
-        return Response.json({
+      return Response.json(
+        {
           optimizedText,
           explanation,
           changes,
           rawText,
           provider,
           model: modelId,
-        }, { headers: corsHeaders });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to optimize prompt';
-        return Response.json({ error: message }, { status: 500, headers: corsHeaders });
-      }
+        },
+        { headers: corsHeaders }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to optimize prompt';
+      return Response.json({ error: message }, { status: 500, headers: corsHeaders });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid request';
     return Response.json({ error: message }, { status: 400, headers: corsHeaders });
