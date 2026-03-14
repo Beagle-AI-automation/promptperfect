@@ -21,7 +21,7 @@ export function PromptInput({ value, onChange, disabled }: PromptInputProps) {
       />
       <div className="flex justify-end gap-4 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{charCount} characters</span>
-        <span>~{tokenCount} tokens</span>
+        <span>~{tokenCount} tokens (this prompt)</span>
       </div>
     </div>
   );

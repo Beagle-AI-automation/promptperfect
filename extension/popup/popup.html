@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PromptPerfect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      width: 320px;
+      min-height: 280px;
+      background: #050505;
+      color: #ECECEC;
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      font-size: 14px;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: #a1a1aa;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #0d0d0d;
+      color: #ECECEC;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4552FF;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #4552FF;
+      color: white;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button:hover { background: #5563FF; }
+    #status {
+      margin-top: 12px;
+      font-size: 12px;
+    }
+    #status.connected { color: #22c55e; }
+    #status.disconnected { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>PromptPerfect</h1>
+  <p style="margin:0 0 12px; font-size:12px; color:#71717a;">Set the URL of your PromptPerfect app. Use <code style="background:#27272a; padding:2px 6px; border-radius:4px;">http://localhost:3000</code> for local dev.</p>
+  <label for="apiUrl">API URL</label>
+  <input type="text" id="apiUrl" placeholder="http://localhost:3000 or https://your-app.vercel.app" />
+  <label for="mode">Mode</label>
+  <select id="mode">
+    <option value="better">Better</option>
+    <option value="specific">Specific</option>
+    <option value="cot">Chain of thought</option>
+  </select>
+  <label for="apiKey">API Key (optional)</label>
+  <input type="password" id="apiKey" placeholder="Leave empty for default Gemini" />
+  <button id="save">Save</button>
+  <p id="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>

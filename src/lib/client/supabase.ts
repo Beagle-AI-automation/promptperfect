@@ -19,7 +19,9 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   if (adminCached) return adminCached;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_SERVICE_KEY?.trim();
   if (!url || !serviceRoleKey) return null;
 
   adminCached = createClient(url, serviceRoleKey);
