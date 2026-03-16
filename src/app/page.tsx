@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Clipboard, Wand2, Sparkles } from "lucide-react";
 import { Header } from "@/components/Header";
 import { PromptInput } from "@/components/PromptInput";
 import { ModeSelector } from "@/components/ModeSelector";
+import { PromptOutput } from "@/components/PromptOutput";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import type { OptimizeMode } from "@/components/ModeSelector";
+import { saveToHistory } from "@/lib/history";
+import type { HistoryItem } from "@/lib/history";
 
 const steps = [
   {
@@ -22,9 +26,62 @@ const steps = [
   },
 ];
 
+const BYOK_STORAGE_KEY = "pp_api_key";
+
 export default function Page() {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<OptimizeMode>("better");
+  const [optimized, setOptimized] = useState("");
+  const [explanation, setExplanation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
+  const handleOptimize = useCallback(async () => {
+    const original = prompt.trim();
+    if (!original) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const apiKey =
+        typeof window !== "undefined"
+          ? localStorage.getItem(BYOK_STORAGE_KEY)
+          : null;
+      const res = await fetch("/api/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: original,
+          mode,
+          apiKey: apiKey ?? undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Optimization failed");
+        return;
+      }
+      setOptimized(data.optimizedText ?? "");
+      setExplanation(data.explanation ?? "");
+      await saveToHistory(
+        original,
+        data.optimizedText ?? "",
+        data.mode ?? mode,
+        data.explanation ?? ""
+      );
+      setHistoryRefreshKey((k) => k + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [prompt, mode]);
+
+  const handleSelectHistoryItem = useCallback((item: HistoryItem) => {
+    setPrompt(item.prompt_original);
+    setOptimized(item.prompt_optimized);
+    setExplanation(item.explanation ?? "");
+  }, []);
 
   return (
     <main className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-zinc-50 font-sans dark:bg-zinc-950">
@@ -86,9 +143,54 @@ export default function Page() {
 
         {/* Optimizer */}
         <section id="optimizer" className="scroll-mt-16 min-w-0 pt-2">
-          <div className="flex min-w-0 flex-col gap-8">
-            <PromptInput value={prompt} onChange={setPrompt} />
-            <ModeSelector selected={mode} onSelect={setMode} />
+          <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[1fr_280px]">
+            <div className="flex min-w-0 flex-col gap-8">
+              <PromptInput
+                value={prompt}
+                onChange={setPrompt}
+                disabled={loading}
+              />
+              <ModeSelector
+                selected={mode}
+                onSelect={setMode}
+                disabled={loading}
+              />
+              <div>
+                <button
+                  type="button"
+                  onClick={handleOptimize}
+                  disabled={loading || !prompt.trim()}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                  {loading ? (
+                    "Optimizing…"
+                  ) : (
+                    <>
+                      <Wand2 className="h-5 w-5" aria-hidden />
+                      Optimize
+                    </>
+                  )}
+                </button>
+                {error && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {error}
+                  </p>
+                )}
+              </div>
+              {(optimized || explanation) && (
+                <PromptOutput
+                  original={prompt}
+                  optimized={optimized}
+                  explanation={explanation}
+                />
+              )}
+            </div>
+            <aside className="min-w-0 lg:max-w-[280px]">
+              <HistoryPanel
+                onSelectItem={handleSelectHistoryItem}
+                refreshKey={historyRefreshKey}
+              />
+            </aside>
           </div>
         </section>
       </div>
