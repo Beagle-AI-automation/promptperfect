@@ -1,8 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
-import { DiffView } from "@/components/DiffView";
+
+const DiffViewLazy = dynamic(
+  () => import("@/components/DiffView").then((m) => ({ default: m.DiffView })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-zinc-200 bg-white text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+        Loading diff…
+      </div>
+    ),
+  }
+);
 
 export interface PromptOutputProps {
   optimized: string;
@@ -73,7 +85,7 @@ export function PromptOutput({
           )}
         </div>
       ) : (
-        <DiffView original={original} optimized={optimized} />
+        <DiffViewLazy original={original} optimized={optimized} />
       )}
     </div>
   );
