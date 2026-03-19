@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import type { Provider } from '@/lib/types';
 
 const PROVIDER_MODELS: Record<Provider, string> = {

@@ -15,6 +15,13 @@ export const SYSTEM_PROMPTS: Record<OptimizeMode, string> = {
   longer: LONGER,
 };
 
-export function getSystemPrompt(mode: OptimizeMode): string {
-  return SYSTEM_PROMPTS[mode] ?? SYSTEM_PROMPTS.better;
+/**
+ * Supports legacy modes (better/shorter/longer) and app modes from `@/lib/types`
+ * (specific, cot, …). Unknown modes fall back to the "better" prompt.
+ */
+export function getSystemPrompt(mode: string): string {
+  if (mode in SYSTEM_PROMPTS) {
+    return SYSTEM_PROMPTS[mode as OptimizeMode];
+  }
+  return SYSTEM_PROMPTS.better;
 }

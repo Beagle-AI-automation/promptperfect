@@ -94,6 +94,7 @@ export default function Page() {
       <div className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-4 py-16 sm:px-6 md:px-8 lg:px-10">
         <Header onApiKeyClick={() => setApiKeyDialogOpen(true)} />
         <ApiKeyDialog
+          key={String(apiKeyDialogOpen)}
           open={apiKeyDialogOpen}
           onClose={() => setApiKeyDialogOpen(false)}
           onSave={handleSaveApiKey}

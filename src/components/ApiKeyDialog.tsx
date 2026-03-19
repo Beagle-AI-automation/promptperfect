@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export interface ApiKeyDialogProps {
   open: boolean;
@@ -16,10 +16,6 @@ export function ApiKeyDialog({
   title = "API key",
 }: ApiKeyDialogProps) {
   const [value, setValue] = useState("");
-
-  useEffect(() => {
-    if (!open) setValue("");
-  }, [open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

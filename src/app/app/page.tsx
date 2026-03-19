@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Settings } from 'lucide-react';
 import { PromptInput } from '@/components/PromptInput';
-import { ModeSelector } from '@/components/ModeSelector';
-import { PromptOutput } from '@/components/PromptOutput';
+import { AppModeSelector } from '@/components/AppModeSelector';
+import { StreamingPromptOutput } from '@/components/StreamingPromptOutput';
 import { ExplanationPanel } from '@/components/ExplanationPanel';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
 import { StatsBar } from '@/components/StatsBar';
@@ -73,7 +73,7 @@ export default function AppPage() {
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [statsRefresh, setStatsRefresh] = useState(0);
-  const [guestId, setGuestId] = useState<string>('');
+  const [, setGuestId] = useState<string>('');
   const [hydrated, setHydrated] = useState(false);
 
   // Sync response state (for BYOK)
@@ -306,7 +306,7 @@ export default function AppPage() {
               <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Optimized prompt
               </h2>
-              <PromptOutput
+              <StreamingPromptOutput
                 text={completion}
                 isStreaming={isLoading}
                 onExplanation={setExplanation}
@@ -333,7 +333,7 @@ export default function AppPage() {
           </div>
 
           <div className="flex flex-col items-center gap-4">
-            <ModeSelector
+            <AppModeSelector
               value={selectedMode}
               onChange={setSelectedMode}
               disabled={isLoading}

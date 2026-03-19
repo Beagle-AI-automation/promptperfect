@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { startTransition, useState, useEffect } from 'react';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import type { OptimizationMode, Provider } from '@/lib/types';
 
@@ -27,8 +27,10 @@ export function FeedbackButtons({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSubmitted(false);
-    setError(null);
+    startTransition(() => {
+      setSubmitted(false);
+      setError(null);
+    });
   }, [sessionId]);
 
   const sendFeedback = async (feedback: 'up' | 'down') => {
