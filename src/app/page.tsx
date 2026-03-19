@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Clipboard, Wand2, Sparkles } from "lucide-react";
 import { Header } from "@/components/Header";
+import { ApiKeyDialog } from "@/components/ApiKeyDialog";
 import { PromptInput } from "@/components/PromptInput";
 import { ModeSelector } from "@/components/ModeSelector";
 import { PromptOutput } from "@/components/PromptOutput";
@@ -36,6 +37,11 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+
+  const handleSaveApiKey = useCallback((key: string) => {
+    localStorage.setItem(BYOK_STORAGE_KEY, key);
+  }, []);
 
   const handleOptimize = useCallback(async () => {
     const original = prompt.trim();
@@ -86,7 +92,13 @@ export default function Page() {
   return (
     <main className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-zinc-50 font-sans dark:bg-zinc-950">
       <div className="mx-auto w-full min-w-0 max-w-5xl flex-1 px-4 py-16 sm:px-6 md:px-8 lg:px-10">
-        <Header />
+        <Header onApiKeyClick={() => setApiKeyDialogOpen(true)} />
+        <ApiKeyDialog
+          open={apiKeyDialogOpen}
+          onClose={() => setApiKeyDialogOpen(false)}
+          onSave={handleSaveApiKey}
+          title="Bring your own API key"
+        />
 
         {/* Hero */}
         <section className="mb-20 min-w-0 text-center md:mb-24">
