@@ -1,0 +1,24 @@
+.pp-optimize-button {
+  position: absolute;
+  background: #4552FF;
+  color: white;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  border: none;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(69, 82, 255, 0.4);
+  z-index: 2147483647;
+  transition: background 0.15s ease;
+}
+
+.pp-optimize-button:hover {
+  background: #5563FF;
+}
+
+.pp-optimize-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
