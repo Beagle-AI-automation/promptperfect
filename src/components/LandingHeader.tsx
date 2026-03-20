@@ -9,7 +9,16 @@ export function LandingHeader() {
         <h1 className="text-xl font-bold text-zinc-900 dark:text-[#ECECEC]">
           PromptPerfect
         </h1>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">by Beagle</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <a
+            href="https://beaglecorp.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[#4552FF] underline-offset-2 hover:underline"
+          >
+            by Beagle
+          </a>
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Link

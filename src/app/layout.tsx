@@ -18,8 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PromptPerfect",
-  description: "Open-source prompt optimizer that teaches you why",
+  title: "PromptPerfect by Beagle — AI Prompt Optimizer",
+  description:
+    "Optimize your AI prompts for better results. Free API, Chrome extension, and web app.",
 };
 
 export default function RootLayout({

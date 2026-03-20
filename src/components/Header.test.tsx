@@ -16,6 +16,14 @@ describe("Header", () => {
     ).toBeInTheDocument();
   });
 
+  it("links by Beagle to beaglecorp.com", () => {
+    renderHeader(<Header />);
+    const link = screen.getByRole("link", { name: "by Beagle" });
+    expect(link).toHaveAttribute("href", "https://beaglecorp.com");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
   it("does not render API key button when onApiKeyClick is not provided", () => {
     renderHeader(<Header />);
     expect(screen.queryByRole("button", { name: "API key" })).not.toBeInTheDocument();

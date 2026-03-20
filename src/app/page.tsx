@@ -8,6 +8,7 @@ import { PromptInput } from "@/components/PromptInput";
 import { ModeSelector } from "@/components/ModeSelector";
 import { PromptOutput } from "@/components/PromptOutput";
 import { HistoryPanel } from "@/components/HistoryPanel";
+import { WorksEverywhere } from "@/components/WorksEverywhere";
 import type { OptimizeMode } from "@/components/ModeSelector";
 import { saveToHistory } from "@/lib/history";
 import type { HistoryItem } from "@/lib/history";
@@ -103,7 +104,7 @@ export default function Page() {
 
         {/* Hero */}
         <section className="mb-20 min-w-0 text-center md:mb-24">
-          <h2 className="animate-fade-in bg-gradient-to-r from-zinc-900 via-zinc-700 to-zinc-900 bg-clip-text text-3xl font-semibold leading-tight tracking-tight text-transparent dark:from-zinc-100 dark:via-zinc-300 dark:to-zinc-100 sm:text-4xl md:text-5xl">
+          <h2 className="animate-fade-in bg-gradient-to-r from-zinc-900 via-[#4552FF] to-zinc-900 bg-clip-text text-3xl font-semibold leading-tight tracking-tight text-transparent dark:from-zinc-100 dark:via-[#7b85ff] dark:to-zinc-100 sm:text-4xl md:text-5xl">
             PromptPerfect
           </h2>
           <p className="animate-fade-in animate-fade-in-delay-1 mx-auto mt-4 max-w-2xl break-words px-1 text-base leading-relaxed text-zinc-600 dark:text-zinc-400 sm:mt-5 sm:text-lg">
@@ -116,7 +117,7 @@ export default function Page() {
                 key={label}
                 className={`animate-fade-in flex min-w-0 flex-col items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-6 dark:border-zinc-800 dark:bg-zinc-900/50 sm:px-6 sm:py-7 ${i === 0 ? "animate-fade-in-delay-2" : i === 1 ? "animate-fade-in-delay-3" : "animate-fade-in-delay-4"}`}
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#4552FF]/10 text-[#4552FF] dark:bg-[#4552FF]/20 dark:text-[#9aa4ff]">
                   <Icon className="h-6 w-6" aria-hidden />
                 </div>
                 <span className="break-words text-center text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-300 sm:text-base">
@@ -134,7 +135,7 @@ export default function Page() {
 
           <a
             href="#optimizer"
-            className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 active:scale-[0.98] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 sm:mt-12"
+            className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 active:scale-[0.98] sm:mt-12"
           >
             Try it now
           </a>
@@ -153,6 +154,8 @@ export default function Page() {
             </span>
           </footer>
         </section>
+
+        <WorksEverywhere />
 
         {/* Optimizer */}
         <section id="optimizer" className="scroll-mt-16 min-w-0 pt-2">
@@ -173,7 +176,7 @@ export default function Page() {
                   type="button"
                   onClick={handleOptimize}
                   disabled={loading || !prompt.trim()}
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
                 >
                   {loading ? (
                     "Optimizing…"
