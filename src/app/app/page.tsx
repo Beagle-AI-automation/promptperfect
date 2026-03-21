@@ -265,6 +265,7 @@ export default function AppPage() {
   const handleHistorySelect = useCallback(
     (item: OptimizationHistoryItem) => {
       setSelectedHistoryItem(item);
+      setHistoryId(item.id); // Set the history ID so Share button appears
       const full =
         item.prompt_optimized +
         (item.explanation.trim()
