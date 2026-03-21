@@ -22,7 +22,29 @@ STRICT OUTPUT STRUCTURE (the app splits on these exact delimiter lines):
 
 Use clear, professional wording.`;
 
-const BETTER = `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and effectiveness while preserving intent.${OUTPUT_FORMAT}`;
+const BETTER = `You are an expert prompt engineer. Transform the user's prompt into a significantly improved version that is:
+- Longer and more detailed (aim for 3-5x the original length)
+- Structured with clear step-by-step instructions
+- Uses chain-of-thought reasoning patterns
+- Breaks down complex tasks into numbered or bulleted steps
+- Includes context, constraints, and expected output format
+- Preserves the original intent while making it much more effective
+
+Focus on:
+1. Adding explicit reasoning steps ("First analyze X, then consider Y, finally conclude Z")
+2. Breaking tasks into clear, sequential steps
+3. Specifying what to think about at each stage
+4. Adding relevant context and constraints
+5. Defining success criteria
+
+${OUTPUT_FORMAT}
+
+IMPORTANT: In the EXPLANATION section (D), use numbered steps instead of paragraphs:
+1. Step one explanation
+2. Step two explanation
+3. Step three explanation
+etc.`;
+
 
 const SPECIFIC = `You are an expert prompt engineer. Rewrite the user's prompt to be highly specific: add audience, constraints, desired format, success criteria, edge cases, and measurable outcomes where it helps. Keep the same overall goal.${OUTPUT_FORMAT}`;
 
