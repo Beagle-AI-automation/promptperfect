@@ -296,8 +296,8 @@ export default function AppPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen w-full max-w-[100vw] flex-col bg-[#050505] font-sans md:pr-72">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#1a1a1a] px-6">
+    <div className="relative flex min-h-screen w-full flex-col bg-[#050505] font-sans md:pr-72">
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#1a1a1a] bg-[#050505]/95 px-6 backdrop-blur-sm md:pr-[calc(18rem+1.5rem)]">
         <Link href="/" className="flex items-baseline gap-2">
           <span className="text-lg font-bold text-[#ECECEC]">PromptPerfect</span>
           <span className="text-sm text-[#666]">by Beagle</span>
@@ -324,7 +324,7 @@ export default function AppPage() {
         </div>
       </header>
 
-      <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain">
+      <main className="smooth-scroll mt-14 flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
         <div className="shrink-0 px-6 pt-5">
           <StatsBar refreshTrigger={statsRefresh} />
         </div>
