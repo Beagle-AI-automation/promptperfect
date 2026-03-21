@@ -1,8 +1,11 @@
 'use client';
 
-import { Clipboard, Wand2, Sparkles } from 'lucide-react';
+import { Braces, Clipboard, Globe, Puzzle, Sparkles, Wand2 } from 'lucide-react';
 import Link from 'next/link';
 import { LandingHeader } from '@/components/LandingHeader';
+
+const EXTENSION_INSTALL_URL =
+  'https://github.com/Beagle-AI-automation/promptperfect/blob/main/extension/README.md';
 
 const steps = [
   {
@@ -61,6 +64,96 @@ export default function Page() {
           >
             Try it now
           </Link>
+        </section>
+
+        <section
+          aria-labelledby="works-everywhere-heading"
+          className="mb-20 min-w-0 md:mb-24"
+        >
+          <h2
+            id="works-everywhere-heading"
+            className="text-center text-2xl font-semibold tracking-tight text-[#ECECEC] sm:text-3xl"
+          >
+            Works Everywhere
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-zinc-400 sm:text-base">
+            Use PromptPerfect in the browser, from Chrome on any site, or from your own stack via
+            the API.
+          </p>
+
+          <div className="mx-auto mt-10 grid w-full max-w-5xl grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
+            <article className="flex min-w-0 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:p-7">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+                <Globe className="h-6 w-6" aria-hidden />
+              </div>
+              <h3 className="text-lg font-semibold text-[#ECECEC]">Web App</h3>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-zinc-400">
+                Paste, optimize, and read explanations — no install required.
+              </p>
+              <Link
+                href="/app"
+                className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-[#4552FF] px-4 py-2.5 text-sm font-medium text-[#4552FF] transition hover:bg-[#4552FF]/10"
+              >
+                Open web app
+              </Link>
+            </article>
+
+            <article className="flex min-w-0 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:p-7">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+                <Puzzle className="h-6 w-6" aria-hidden />
+              </div>
+              <h3 className="text-lg font-semibold text-[#ECECEC]">Chrome Extension</h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                Optimize prompts from ChatGPT, Claude, Gmail, and more.
+              </p>
+              <div
+                className="mt-4 aspect-[16/10] w-full overflow-hidden rounded-lg border border-dashed border-zinc-600 bg-zinc-800/50"
+                role="img"
+                aria-label="Chrome extension screenshot placeholder"
+              >
+                <div className="flex h-full w-full items-center justify-center px-4 text-center text-xs text-zinc-500">
+                  Extension preview
+                </div>
+              </div>
+              <a
+                href={EXTENSION_INSTALL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-[#4552FF] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Add to Chrome
+              </a>
+              <p className="mt-2 text-xs text-zinc-500">
+                Load unpacked or follow the README if the extension is not yet on the Chrome Web
+                Store.
+              </p>
+            </article>
+
+            <article className="flex min-w-0 flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 sm:p-7">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+                <Braces className="h-6 w-6" aria-hidden />
+              </div>
+              <h3 className="text-lg font-semibold text-[#ECECEC]">API</h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                Call the optimizer from your backend or scripts.
+              </p>
+              <pre className="mt-4 overflow-x-auto rounded-lg border border-zinc-700 bg-[#0a0a0a] p-4 text-left text-xs leading-relaxed text-zinc-300">
+                <code>{`POST /api/optimize
+Content-Type: application/json
+
+{
+  "prompt": "Your draft…",
+  "mode": "better"
+}`}</code>
+              </pre>
+              <Link
+                href="/docs"
+                className="mt-4 inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-[#4552FF] underline-offset-2 transition hover:underline"
+              >
+                Read the Docs <span aria-hidden>→</span>
+              </Link>
+            </article>
+          </div>
         </section>
       </div>
 
