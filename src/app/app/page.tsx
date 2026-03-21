@@ -15,6 +15,7 @@ import {
   saveToHistory,
 } from '@/lib/client/optimizationHistory';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
+import { ShareButton } from '@/components/ShareButton';
 import { StatsBar } from '@/components/StatsBar';
 import { AppSettingsPanel } from '@/components/AppSettingsPanel';
 import type { OptimizationMode, Provider } from '@/lib/types';
@@ -69,6 +70,7 @@ export default function AppPage() {
   const [apiKey, setApiKey] = useState('');
   const [explanation, setExplanation] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const [runMeta, setRunMeta] = useState<{
     mode: OptimizationMode;
     provider: Provider;
@@ -138,15 +140,16 @@ export default function AppPage() {
       mode: selectedMode,
       provider,
     },
-    onFinish: (prompt, completion) => {
+    onFinish: async (prompt, completion) => {
       setStatsRefresh((n) => n + 1);
       setHistoryRefresh((n) => n + 1);
-      void saveToHistory({
+      const histId = await saveToHistory({
         prompt_original: prompt.trim(),
         prompt_optimized: optimizedTextFromFullCompletion(completion),
         mode: optimizeContextRef.current.mode,
         explanation: explanationTextFromFullCompletion(completion),
       });
+      setHistoryId(histId);
     },
     fetch: async (input, init) => {
       const res = await fetch(input, init);
@@ -181,6 +184,7 @@ export default function AppPage() {
     optimizeContextRef.current.mode = selectedMode;
     setExplanation('');
     setSessionId(sid);
+    setHistoryId(null); // Reset history ID for new optimization
     setRunMeta({ mode: selectedMode, provider, inputLength: trimmed.length });
 
     const coreBody = {
@@ -226,7 +230,7 @@ export default function AppPage() {
             rawText?: string;
           };
         })
-        .then((data) => {
+        .then(async (data) => {
           const { optimizedText, explanation: expl, changes, rawText } = data;
           const raw = typeof rawText === 'string' ? rawText : '';
           const scoreMatch = raw.match(SCORE_PATTERN);
@@ -240,12 +244,13 @@ export default function AppPage() {
           setExplanation(expl || '');
           setStatsRefresh((n) => n + 1);
           setHistoryRefresh((n) => n + 1);
-          void saveToHistory({
+          const histId = await saveToHistory({
             prompt_original: trimmed,
             prompt_optimized: (optimizedText ?? '').trim(),
             mode: selectedMode,
             explanation: (expl ?? '').trim(),
           });
+          setHistoryId(histId);
         })
         .catch((err) =>
           setSyncError(err instanceof Error ? err.message : 'Request failed'),
@@ -342,15 +347,18 @@ export default function AppPage() {
               onExplanation={setExplanation}
               afterTextarea={
                 completion && !isLoading ? (
-                  <FeedbackButtons
-                    sessionId={sessionId}
-                    mode={runMeta?.mode ?? selectedMode}
-                    provider={runMeta?.provider ?? provider}
-                    inputLength={runMeta?.inputLength ?? inputText.trim().length}
-                    outputLength={getOptimizedPromptText(completion).length}
-                    disabled={false}
-                    onSubmitted={() => setStatsRefresh((n) => n + 1)}
-                  />
+                  <div className="flex items-center gap-3">
+                    {historyId && <ShareButton historyId={historyId} />}
+                    <FeedbackButtons
+                      sessionId={sessionId}
+                      mode={runMeta?.mode ?? selectedMode}
+                      provider={runMeta?.provider ?? provider}
+                      inputLength={runMeta?.inputLength ?? inputText.trim().length}
+                      outputLength={getOptimizedPromptText(completion).length}
+                      disabled={false}
+                      onSubmitted={() => setStatsRefresh((n) => n + 1)}
+                    />
+                  </div>
                 ) : null
               }
             />

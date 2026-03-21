@@ -18,6 +18,7 @@ PromptPerfect takes your draft prompts—whether vague, messy, or just a rough i
   - **Chain-of-Thought**: Structures the prompt to encourage step-by-step reasoning.
 - **Privacy-First**: Your API keys are stored locally in your browser and never saved to our servers.
 - **Open Source**: Built with modern web technologies, free to use and extend.
+- **n8n Integration**: Ready-to-import workflow templates for automation (see `examples/`).
 
 ## Tech Stack
 
@@ -75,6 +76,19 @@ Follow these steps to run PromptPerfect locally on your machine.
     ```
 
     Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Integrations
+
+### n8n Workflow Automation
+
+PromptPerfect includes ready-to-import n8n workflow templates for automating prompt optimization in your workflows.
+
+**Quick Start:**
+1. Import `examples/n8n-optimize-prompt.json` into n8n
+2. Configure your PromptPerfect URL
+3. Start automating!
+
+See `examples/README.md` for full documentation and advanced use cases.
 
 ## Deploy Your Own
 

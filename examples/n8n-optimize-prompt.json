@@ -1,0 +1,130 @@
+{
+  "name": "PromptPerfect - Optimize Prompt",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8c8c0b0e-5f4e-4e1e-8e5e-8e5e8e5e8e5e",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "promptperfect_url",
+              "value": "http://localhost:3000"
+            },
+            {
+              "name": "prompt",
+              "value": "Write a blog post about AI"
+            },
+            {
+              "name": "mode",
+              "value": "better"
+            },
+            {
+              "name": "provider",
+              "value": "gemini"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a1a1a1a-1a1a-1a1a-1a1a-1a1a1a1a1a1a",
+      "name": "Set Input Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        460,
+        300
+      ],
+      "notes": "Configure your prompt and settings here:\n- promptperfect_url: Your PromptPerfect instance URL\n- prompt: The text to optimize\n- mode: better, specific, cot, developer, research, beginner, product, marketing\n- provider: gemini, openai, anthropic"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.promptperfect_url }}/api/optimize-sync",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.prompt, mode: $json.mode, provider: $json.provider, version: 'v1' }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "2b2b2b2b-2b2b-2b2b-2b2b-2b2b2b2b2b2b",
+      "name": "Call PromptPerfect API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        300
+      ],
+      "notes": "Sends the prompt to PromptPerfect for optimization"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the optimized prompt and explanation from the API response\nconst response = $input.item.json;\n\nreturn {\n  json: {\n    original_prompt: response.rawText ? response.rawText.split('---EXPLANATION---')[0].replace(/---SCORE---\\d+---/g, '').trim() : '',\n    optimized_prompt: response.optimizedText || '',\n    explanation: response.explanation || '',\n    changes: response.changes || '',\n    mode: $('Set Input Parameters').item.json.mode,\n    provider: response.provider || $('Set Input Parameters').item.json.provider,\n    model: response.model || ''\n  }\n};"
+      },
+      "id": "3c3c3c3c-3c3c-3c3c-3c3c-3c3c3c3c3c3c",
+      "name": "Extract Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "notes": "Parses the API response and extracts:\n- Original prompt\n- Optimized prompt\n- Explanation of changes\n- Mode and provider used"
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set Input Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Input Parameters": {
+      "main": [
+        [
+          {
+            "node": "Call PromptPerfect API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call PromptPerfect API": {
+      "main": [
+        [
+          {
+            "node": "Extract Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-03-21T00:00:00.000Z",
+  "versionId": "1"
+}

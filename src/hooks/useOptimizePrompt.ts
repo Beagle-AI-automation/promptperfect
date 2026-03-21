@@ -8,6 +8,7 @@ import {
   postOptimizeSync,
   readUint8Stream,
 } from '@/lib/client/optimizeApi';
+import { saveToHistory } from '@/lib/client/optimizationHistory';
 import type { Mode, OptimizeVersion, ProviderId } from '@/lib/types';
 import type { OptimizationLogInsert } from '@/lib/client/optimizationLogs';
 
@@ -20,12 +21,26 @@ async function safeLogOptimization(insert: OptimizationLogInsert) {
   }
 }
 
+async function safeSaveToHistory(params: {
+  prompt_original: string;
+  prompt_optimized: string;
+  mode: string;
+  explanation: string;
+}): Promise<string | null> {
+  try {
+    return await saveToHistory(params);
+  } catch {
+    return null;
+  }
+}
+
 interface OptimizeState {
   optimizedText: string;
   explanation: string;
   changes: string;
   rawText: string;
   sessionId: string;
+  historyId: string | null;
   provider: ProviderId;
   model: string;
   isLoading: boolean;
@@ -45,6 +60,7 @@ function initialState(): OptimizeState {
     changes: '',
     rawText: '',
     sessionId: '',
+    historyId: null,
     provider: DEFAULT_PROVIDER,
     model: '',
     isLoading: false,
@@ -86,6 +102,7 @@ export function useOptimizePrompt() {
         changes: '',
         rawText: '',
         sessionId,
+        historyId: null,
         provider: args.provider,
         model: '',
         isLoading: true,
@@ -126,6 +143,16 @@ export function useOptimizePrompt() {
             optimized_length: data.optimizedText.length,
             explanation_length: data.explanation.length + data.changes.length,
           });
+
+          // Save to history and get the ID
+          const historyId = await safeSaveToHistory({
+            prompt_original: prompt,
+            prompt_optimized: data.optimizedText,
+            mode: args.mode,
+            explanation: data.explanation,
+          });
+
+          setState((s) => ({ ...s, historyId }));
 
           return;
         }
@@ -169,7 +196,15 @@ export function useOptimizePrompt() {
           explanation_length: explanation.length + changes.length,
         });
 
-        setState((s) => ({ ...s, isLoading: false }));
+        // Save to history and get the ID
+        const historyId = await safeSaveToHistory({
+          prompt_original: prompt,
+          prompt_optimized: optimizedText,
+          mode: args.mode,
+          explanation,
+        });
+
+        setState((s) => ({ ...s, isLoading: false, historyId }));
       } catch (err) {
         if (controller.signal.aborted) return;
         setState((s) => ({

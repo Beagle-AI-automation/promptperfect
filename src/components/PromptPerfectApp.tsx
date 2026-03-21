@@ -29,6 +29,7 @@ export function PromptPerfectApp() {
     explanation,
     changes,
     sessionId,
+    historyId,
     provider: usedProvider,
     model: usedModel,
     isLoading,
@@ -126,6 +127,7 @@ export function PromptPerfectApp() {
             explanation={explanation}
             changes={changes}
             sessionId={sessionId}
+            historyId={historyId}
             mode={mode}
             isLoading={isLoading}
             provider={usedProvider || PROVIDER}

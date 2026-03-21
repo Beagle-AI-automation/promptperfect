@@ -49,22 +49,30 @@ export async function saveToHistory(params: {
   prompt_optimized: string;
   mode: string;
   explanation: string;
-}): Promise<void> {
+}): Promise<string | null> {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return null;
 
   const session_id = getOrCreateSessionId();
-  if (!session_id) return;
+  if (!session_id) return null;
 
   try {
-    await client.from('pp_optimization_history').insert({
-      session_id,
-      prompt_original: params.prompt_original,
-      prompt_optimized: params.prompt_optimized,
-      mode: params.mode,
-      explanation: params.explanation,
-    });
+    const { data, error } = await client
+      .from('pp_optimization_history')
+      .insert({
+        session_id,
+        prompt_original: params.prompt_original,
+        prompt_optimized: params.prompt_optimized,
+        mode: params.mode,
+        explanation: params.explanation,
+      })
+      .select('id')
+      .single();
+
+    if (error || !data) return null;
+    return data.id;
   } catch {
     // non-blocking
+    return null;
   }
 }

@@ -3,6 +3,7 @@
 import { ExplanationPanel } from '@/components/ExplanationPanel';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
 import { OutputCard } from '@/components/OutputCard';
+import { ShareButton } from '@/components/ShareButton';
 import type { OptimizationMode, Provider } from '@/lib/types';
 
 interface PromptPerfectOutputsProps {
@@ -10,6 +11,7 @@ interface PromptPerfectOutputsProps {
   explanation: string;
   changes: string;
   sessionId: string;
+  historyId: string | null;
   mode: OptimizationMode;
   isLoading: boolean;
   provider: Provider;
@@ -39,7 +41,8 @@ export function PromptPerfectOutputs(props: PromptPerfectOutputsProps) {
           <ExplanationPanel explanation={props.changes} />
         </div>
         {props.optimizedText && !props.isLoading && (
-          <div className="shrink-0">
+          <div className="flex shrink-0 items-center gap-3">
+            {props.historyId && <ShareButton historyId={props.historyId} />}
             <FeedbackButtons
               sessionId={props.sessionId}
               mode={props.mode}

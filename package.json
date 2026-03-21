@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "db:migrate": "node supabase/migrate.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.54",
@@ -21,7 +22,9 @@
     "@ai-sdk/react": "^3.0.88",
     "@supabase/supabase-js": "^2.97.0",
     "ai": "^6.0.85",
+    "dotenv": "^17.3.1",
     "lucide-react": "^0.563.0",
+    "nanoid": "^5.1.7",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-diff-viewer-continued": "^4.2.0",
