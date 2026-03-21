@@ -19,8 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PromptPerfect by Beagle",
-  description: "The open-source prompt optimizer",
+  title: "PromptPerfect by Beagle — AI Prompt Optimizer",
+  description:
+    "Optimize your AI prompts for better results. Free API, Chrome extension, and web app.",
 };
 
 export default function RootLayout({
@@ -38,7 +39,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} min-h-screen bg-[#050505] font-sans text-[#ECECEC] antialiased`}
+        className={`${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider>{children}</ThemeProvider>
