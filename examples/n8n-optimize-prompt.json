@@ -1,116 +1,134 @@
 {
-  "name": "PromptPerfect - Optimize Prompt",
+  "id": "a8f3c2e1-4b5d-4a6e-9c7f-1d2e3f4a5b6c",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": ""
+  },
+  "name": "PromptPerfect — Optimize Prompt",
+  "tags": [
+    { "name": "promptperfect" },
+    { "name": "ai" },
+    { "name": "prompt-optimization" }
+  ],
   "nodes": [
     {
       "parameters": {},
-      "id": "8c8c0b0e-5f4e-4e1e-8e5e-8e5e8e5e8e5e",
-      "name": "When clicking 'Test workflow'",
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Start",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        240,
-        300
-      ]
+      "position": [240, 300]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
             {
-              "name": "promptperfect_url",
-              "value": "http://localhost:3000"
+              "id": "22222222-2222-4222-8222-222222222221",
+              "name": "promptText",
+              "value": "Explain quantum computing in simple terms",
+              "type": "string"
             },
             {
-              "name": "prompt",
-              "value": "Write a blog post about AI"
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "targetModel",
+              "value": "chatgpt",
+              "type": "string"
             },
             {
-              "name": "mode",
-              "value": "better"
-            },
-            {
-              "name": "provider",
-              "value": "gemini"
+              "id": "22222222-2222-4222-8222-222222222223",
+              "name": "apiKey",
+              "value": "YOUR_API_KEY_HERE",
+              "type": "string"
             }
           ]
         },
         "options": {}
       },
-      "id": "1a1a1a1a-1a1a-1a1a-1a1a-1a1a1a1a1a1a",
-      "name": "Set Input Parameters",
+      "id": "22222222-2222-4222-8222-222222220002",
+      "name": "Set Prompt Input",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.2,
-      "position": [
-        460,
-        300
-      ],
-      "notes": "Configure your prompt and settings here:\n- promptperfect_url: Your PromptPerfect instance URL\n- prompt: The text to optimize\n- mode: better, specific, cot, developer, research, beginner, product, marketing\n- provider: gemini, openai, anthropic"
+      "typeVersion": 3.4,
+      "position": [460, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.promptperfect_url }}/api/optimize-sync",
+        "url": "https://api.promptperfect.jina.ai/api/optimize-sync",
         "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $json.apiKey }}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ prompt: $json.prompt, mode: $json.mode, provider: $json.provider, version: 'v1' }) }}",
+        "jsonBody": "={{ JSON.stringify({ data: { prompt: { text: $json.promptText }, targetModel: $json.targetModel, promptType: 'text' } }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
-      "id": "2b2b2b2b-2b2b-2b2b-2b2b-2b2b2b2b2b2b",
-      "name": "Call PromptPerfect API",
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Optimize Prompt",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        680,
-        300
-      ],
-      "notes": "Sends the prompt to PromptPerfect for optimization"
+      "typeVersion": 4.2,
+      "position": [680, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Extract the optimized prompt and explanation from the API response\nconst response = $input.item.json;\n\nreturn {\n  json: {\n    original_prompt: response.rawText ? response.rawText.split('---EXPLANATION---')[0].replace(/---SCORE---\\d+---/g, '').trim() : '',\n    optimized_prompt: response.optimizedText || '',\n    explanation: response.explanation || '',\n    changes: response.changes || '',\n    mode: $('Set Input Parameters').item.json.mode,\n    provider: response.provider || $('Set Input Parameters').item.json.provider,\n    model: response.model || ''\n  }\n};"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const response = items[0].json;\n\nconst optimizedPrompt =\n  response?.result?.promptOptimized ||\n  response?.promptOptimized ||\n  'No result returned';\n\nconst input = $('Set Prompt Input').first().json;\n\nreturn [\n  {\n    json: {\n      original_prompt: input.promptText || '',\n      optimized_prompt: optimizedPrompt,\n      target_model: input.targetModel || 'chatgpt',\n      success:\n        !!optimizedPrompt && optimizedPrompt !== 'No result returned',\n      timestamp: new Date().toISOString(),\n    },\n  },\n];\n"
       },
-      "id": "3c3c3c3c-3c3c-3c3c-3c3c-3c3c3c3c3c3c",
-      "name": "Extract Results",
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Extract Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        900,
-        300
-      ],
-      "notes": "Parses the API response and extracts:\n- Original prompt\n- Optimized prompt\n- Explanation of changes\n- Mode and provider used"
+      "position": [900, 300]
     }
   ],
   "connections": {
-    "When clicking 'Test workflow'": {
+    "Start": {
       "main": [
         [
           {
-            "node": "Set Input Parameters",
+            "node": "Set Prompt Input",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Set Input Parameters": {
+    "Set Prompt Input": {
       "main": [
         [
           {
-            "node": "Call PromptPerfect API",
+            "node": "Optimize Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Call PromptPerfect API": {
+    "Optimize Prompt": {
       "main": [
         [
           {
-            "node": "Extract Results",
+            "node": "Extract Result",
             "type": "main",
             "index": 0
           }
@@ -123,8 +141,7 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2025-03-21T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "b9e4d3f2-5c6e-4b7f-ad8e-2f3a4b5c6d7e",
+  "active": false
 }

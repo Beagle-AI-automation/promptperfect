@@ -1,263 +1,115 @@
-# n8n Workflow Examples
+# PromptPerfect n8n Workflow Template
 
-This folder contains ready-to-import n8n workflow templates for integrating PromptPerfect into your automation workflows.
+## What This Does
 
-## Available Workflows
+This n8n workflow calls the **PromptPerfect Optimize API** (`POST /api/optimize-sync`) to turn a raw prompt into a clearer, stronger version for your target AI model. Use it to **automate prompt optimization** inside any n8n pipeline—e.g. before calling OpenAI, Claude, or Gemini—so every run gets a consistent, production-ready prompt without leaving your automation stack.
 
-### 1. Optimize Prompt Workflow
+## Prerequisites
 
-**File:** `n8n-optimize-prompt.json`
+- **n8n** installed ([self-hosted](https://docs.n8n.io/hosting/) or [n8n Cloud](https://n8n.io/cloud/))
+- **PromptPerfect API key** — obtain from [app.promptperfect.com](https://app.promptperfect.com) (or your PromptPerfect account dashboard)
 
-A simple workflow that takes a prompt, sends it to PromptPerfect for optimization, and returns the improved version with explanations.
+## Setup — 3 Steps
 
-#### Features:
-- ✅ Manual trigger for easy testing
-- ✅ Configurable input parameters
-- ✅ Calls PromptPerfect API
-- ✅ Extracts and formats results
-- ✅ Returns optimized prompt, explanation, and changes
+### Step 1: Import the Workflow
 
----
+1. Open your n8n instance.
+2. Go to **Workflows** → click **"+"** → **Import from File** (or **Import workflow**).
+3. Select `examples/n8n-optimize-prompt.json` from this repository.
+4. Confirm **Import**.
 
-## Setup Instructions
+### Step 2: Add Your API Key
 
-### Prerequisites
+1. Open the workflow and click the **Set Prompt Input** node.
+2. Find the assignment **`apiKey`** and replace `YOUR_API_KEY_HERE` with your real PromptPerfect API key.
+3. **Save** the workflow.
 
-1. **PromptPerfect running locally or deployed**
-   - Local: `http://localhost:3000`
-   - Production: `https://your-domain.com`
+### Step 3: Set Your Prompt
 
-2. **n8n installed**
-   - Cloud: https://n8n.io
-   - Self-hosted: https://docs.n8n.io/hosting/
+1. In the same **Set Prompt Input** node, edit **`promptText`** to the prompt you want optimized.
+2. Adjust **`targetModel`** if needed (see [Supported Target Models](#supported-target-models) below).
+3. **Save** the workflow.
 
-### Import the Workflow
+## Running the Workflow
 
-1. **Open n8n** in your browser
-2. Click **"Workflows"** in the left sidebar
-3. Click **"Import from File"** or **"Import from URL"**
-4. Select `n8n-optimize-prompt.json`
-5. Click **"Import"**
+- Click **Test workflow** (or execute **Start** → run) to run manually.
+- Open the **Extract Result** node output after a successful run.
+- The field **`optimized_prompt`** contains the optimized text.
 
-### Configure the Workflow
+## Using in Your Own Workflows
 
-#### Node 1: Set Input Parameters
+You can reuse this pattern in larger flows:
 
-Update these values in the "Set Input Parameters" node:
+- **Sub-workflow:** Save this as a dedicated workflow and call it with **Execute Workflow** from another workflow, passing `promptText` / `apiKey` / `targetModel` via the parent.
+- **Webhook:** Replace **Start** (Manual Trigger) with a **Webhook** node. Map `promptText`, `targetModel`, and `apiKey` from the webhook body (or use n8n **Credentials** / **Variables** for the key instead of storing it in the Set node).
 
-```javascript
-{
-  "promptperfect_url": "http://localhost:3000",  // Your PromptPerfect URL
-  "prompt": "Write a blog post about AI",        // Prompt to optimize
-  "mode": "better",                              // Optimization mode
-  "provider": "gemini"                           // LLM provider
-}
-```
+**Example trigger swaps** (replace Manual Trigger **Start** with):
 
-**Available Modes:**
-- `better` - General improvement for clarity and robustness
-- `specific` - Adds constraints and details
-- `cot` - Chain-of-thought reasoning
-- `developer` - Technical/coding prompts
-- `research` - Academic/research prompts
-- `beginner` - Simplified explanations
-- `product` - Product management prompts
-- `marketing` - Marketing/content prompts
+| Trigger | Use case |
+|--------|----------|
+| **Webhook** | Call from any app or service with HTTP POST |
+| **Schedule Trigger** | Optimize prompts on a timer (e.g. hourly digest) |
+| **Slack Trigger** | Optimize prompts from channel messages or slash commands |
+| **Google Sheets** | Read a column of prompts, optimize each row in a loop |
 
-**Available Providers:**
-- `gemini` - Google Gemini (default)
-- `openai` - OpenAI GPT models
-- `anthropic` - Anthropic Claude models
+After swapping the trigger, connect its output to **Set Prompt Input** (or merge fields so `promptText`, `targetModel`, and `apiKey` exist on the item before **Optimize Prompt**).
 
-### Test the Workflow
+## Output Format
 
-1. Click **"Test workflow"** button in n8n
-2. The workflow will:
-   - Send your prompt to PromptPerfect
-   - Wait for optimization (usually 2-10 seconds)
-   - Extract the results
-3. View the output in the "Extract Results" node
-
-### Output Format
-
-The workflow returns a JSON object with:
+After **Extract Result**, each item looks like:
 
 ```json
 {
-  "original_prompt": "Write a blog post about AI",
-  "optimized_prompt": "Write a comprehensive blog post...",
-  "explanation": "The optimized prompt adds clarity by...",
-  "changes": "Key improvements:\n- Added specificity...",
-  "mode": "better",
-  "provider": "gemini",
-  "model": "gemini-2.0-flash"
+  "original_prompt": "your original text",
+  "optimized_prompt": "the AI-optimized version",
+  "target_model": "chatgpt",
+  "success": true,
+  "timestamp": "2025-03-21T10:30:00.000Z"
 }
 ```
 
----
-
-## Advanced Usage
-
-### Use with Webhooks
-
-Replace the **"When clicking 'Test workflow'"** node with a **Webhook** node to:
-- Trigger via HTTP POST requests
-- Integrate with other services
-- Build automated workflows
-
-**Example webhook payload:**
-```json
-{
-  "prompt": "Your prompt here",
-  "mode": "developer",
-  "provider": "gemini"
-}
-```
-
-### Chain Multiple Optimizations
-
-You can chain multiple PromptPerfect calls:
-1. Optimize with `mode: "specific"`
-2. Take the result and optimize again with `mode: "cot"`
-3. Compare results
-
-### Save to Database
-
-Add a database node after "Extract Results" to:
-- Store optimization history
-- Track improvements over time
-- Build a prompt library
-
-### Integration Examples
-
-#### Slack Bot
-```
-Slack Trigger → Set Parameters → PromptPerfect → Send to Slack
-```
-
-#### Automated Content Pipeline
-```
-Google Sheets → Read Prompts → PromptPerfect → Update Sheet
-```
-
-#### API Endpoint
-```
-Webhook → PromptPerfect → Return Response
-```
-
----
+If the API returns an unexpected shape, `optimized_prompt` may be `"No result returned"` and `success` will be `false`.
 
 ## Troubleshooting
 
-### Common Issues
+| Issue | What to check |
+|-------|----------------|
+| **401 Unauthorized** | API key missing, wrong, or expired. Update **`apiKey`** in **Set Prompt Input** or your credential store. |
+| **Timeout** | Increase **Timeout** in the **Optimize Prompt** HTTP Request node (**Options** → **Timeout**), e.g. 60000 ms. |
+| **Empty / wrong result** | Inspect the raw output of **Optimize Prompt**; confirm the live API returns `result.promptOptimized` (or adjust **Extract Result** code to match the actual JSON). |
+| **SSL / DNS errors** | Verify the URL `https://api.promptperfect.jina.ai/api/optimize-sync` is reachable from your n8n host. |
 
-**1. Connection Timeout**
-- Increase timeout in HTTP Request node (default: 60s)
-- Check if PromptPerfect is running and accessible
+## Supported Target Models
 
-**2. 404 Error**
-- Verify the URL is correct (`http://localhost:3000` for local)
-- Make sure PromptPerfect is running: `npm run dev`
+Use these values for **`targetModel`** in the Set node (and in the JSON body). Exact behavior depends on PromptPerfect’s hosted API.
 
-**3. 500 Error**
-- Check PromptPerfect logs for errors
-- Verify API keys are configured in `.env`
-- Try a different provider (e.g., switch from `openai` to `gemini`)
+| `targetModel` | Typical use |
+|---------------|-------------|
+| `chatgpt` | OpenAI ChatGPT-style chat |
+| `gpt4` | GPT-4 class models |
+| `claude` | Anthropic Claude |
+| `gemini` | Google Gemini |
+| `midjourney` | Midjourney / image-style prompting |
 
-**4. Empty Response**
-- Check if the mode is valid
-- Verify the prompt is not empty
-- Look at the HTTP Request node output for error messages
+> **Self-hosted PromptPerfect:** This template targets the **hosted** API URL and body shape above. If you run the open-source app locally, your `POST /api/optimize-sync` may expect fields like `text`, `prompt`, `mode`, and `provider`, plus `Authorization: Bearer <key>`. In that case, change the **Optimize Prompt** URL, headers, and JSON body to match your deployment.
 
-### Debug Tips
+## Files
 
-1. **Enable "Always Output Data"** in HTTP Request node settings
-2. **View raw response** in the HTTP Request node output
-3. **Check PromptPerfect terminal** for API logs
-4. **Test with curl** first:
+| File | Description |
+|------|-------------|
+| `n8n-optimize-prompt.json` | Importable n8n workflow (Manual → Set → HTTP → Code). |
+
+---
+
+**Validate JSON locally:**
 
 ```bash
-curl -X POST http://localhost:3000/api/optimize-sync \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "test prompt",
-    "mode": "better",
-    "provider": "gemini",
-    "version": "v1"
-  }'
+node -e "JSON.parse(require('fs').readFileSync('examples/n8n-optimize-prompt.json', 'utf8')); console.log('Valid JSON')"
 ```
 
----
+**Test in n8n:**
 
-## Workflow Customization
-
-### Add Authentication
-
-If your PromptPerfect instance requires authentication:
-
-1. Update HTTP Request node
-2. Set "Authentication" to "Header Auth"
-3. Add your API key:
-   - Name: `Authorization`
-   - Value: `Bearer YOUR_API_KEY`
-
-### Change Timeout
-
-For longer prompts, increase timeout:
-- Open "Call PromptPerfect API" node
-- Go to "Options" → "Timeout"
-- Set to 120000 (2 minutes) or higher
-
-### Add Error Handling
-
-Add an "IF" node after the HTTP Request to:
-- Check for successful response
-- Handle errors gracefully
-- Retry on failure
-
----
-
-## Example Use Cases
-
-### 1. Bulk Prompt Optimization
-```
-CSV File → Loop → PromptPerfect → Save Results
-```
-
-### 2. Prompt Testing Pipeline
-```
-Test Prompts → PromptPerfect (multiple modes) → Compare Results
-```
-
-### 3. Content Generation Workflow
-```
-Topic List → Generate Prompt → PromptPerfect → LLM → Format Output
-```
-
-### 4. Slack Command
-```
-Slack "/optimize" → PromptPerfect → Reply in Thread
-```
-
----
-
-## Support
-
-- **PromptPerfect Issues:** https://github.com/Beagle-AI-automation/promptperfect/issues
-- **n8n Documentation:** https://docs.n8n.io
-- **n8n Community:** https://community.n8n.io
-
----
-
-## Contributing
-
-Have improvements or new workflows? Submit a PR with:
-- New workflow JSON file
-- Updated README documentation
-- Example use case
-
----
-
-## License
-
-These workflows are provided under the same MIT License as PromptPerfect.
+1. `npx n8n` (or open your cloud instance).
+2. Import `n8n-optimize-prompt.json`.
+3. Set **apiKey** and **promptText** in **Set Prompt Input**.
+4. Run the workflow and confirm **Extract Result** → `optimized_prompt`.
