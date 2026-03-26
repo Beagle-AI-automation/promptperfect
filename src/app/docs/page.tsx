@@ -198,8 +198,7 @@ export default function DocsPage() {
               Core fields (TypeScript-style). Unknown <code className="rounded bg-zinc-900 px-1 py-0.5">mode</code>{' '}
               values fall back to <code className="rounded bg-zinc-900 px-1 py-0.5">better</code>.
             </p>
-            <CodeBlock
-              children={`{
+            <CodeBlock>{`{
   /** Input prompt (preferred) */
   text: string;
   /** Alias accepted for compatibility */
@@ -209,8 +208,7 @@ export default function DocsPage() {
   apiKey?: string;
   session_id?: string;
   version?: 'v1' | 'v2';
-}`}
-            />
+}`}</CodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Response body (200)</h3>
             <p className="mt-2 text-sm text-zinc-400">
@@ -219,8 +217,7 @@ export default function DocsPage() {
               usually starts with <code className="rounded bg-zinc-900 px-1 py-0.5">&quot;- &quot;</code>
               ). Split on newlines if you need a list. Extra fields help with debugging and logging.
             </p>
-            <CodeBlock
-              children={`{
+            <CodeBlock>{`{
   optimizedText: string;
   explanation: string;
   /** Bullet-style lines joined with newlines (not a JSON array) */
@@ -228,8 +225,7 @@ export default function DocsPage() {
   rawText: string;
   provider: string;
   model: string;
-}`}
-            />
+}`}</CodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Errors</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-400">
@@ -246,26 +242,21 @@ export default function DocsPage() {
             </ul>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">cURL</h3>
-            <CodeBlock
-              children={`curl -sS -X POST "${BASE}/api/optimize-sync" \\
+            <CodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
   -H "Content-Type: application/json" \\
   -d '{
     "text": "Write me something about our product.",
     "mode": "better",
     "provider": "gemini"
-  }'`}
-            />
+  }'`}</CodeBlock>
             <p className="mt-2 text-xs text-zinc-500">With BYOK via header:</p>
-            <CodeBlock
-              children={`curl -sS -X POST "${BASE}/api/optimize-sync" \\
+            <CodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_GEMINI_OR_OPENAI_KEY" \\
-  -d '{"text":"Summarize this email in 3 bullets.","mode":"specific","provider":"openai"}'`}
-            />
+  -d '{"text":"Summarize this email in 3 bullets.","mode":"specific","provider":"openai"}'`}</CodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">JavaScript</h3>
-            <CodeBlock
-              children={`const res = await fetch(\`${BASE}/api/optimize-sync\`, {
+            <CodeBlock>{`const res = await fetch(\`${BASE}/api/optimize-sync\`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -284,12 +275,10 @@ if (!res.ok) {
 }
 
 const data = await res.json();
-console.log(data.optimizedText, data.explanation, data.changes);`}
-            />
+console.log(data.optimizedText, data.explanation, data.changes);`}</CodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Python</h3>
-            <CodeBlock
-              children={`import requests
+            <CodeBlock>{`import requests
 
 url = "${BASE}/api/optimize-sync"
 payload = {
@@ -306,8 +295,7 @@ r.raise_for_status()
 data = r.json()
 print(data["optimizedText"])
 print(data["explanation"])
-print(data["changes"])`}
-            />
+print(data["changes"])`}</CodeBlock>
           </section>
 
           <section id="modes" className="scroll-mt-6">
