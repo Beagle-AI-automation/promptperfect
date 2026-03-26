@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/client/supabase';
 import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
 
 export interface OptimizationHistoryItem {

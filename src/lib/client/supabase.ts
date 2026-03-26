@@ -16,7 +16,17 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   const url = getSupabaseUrl();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !anonKey) return null;
+
+  if (!url || !anonKey) {
+    if (typeof window !== 'undefined') {
+      console.warn(
+        '[PromptPerfect] Supabase is not configured. ' +
+          'Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY ' +
+          'in your environment variables. History and Share features will be disabled.'
+      );
+    }
+    return null;
+  }
 
   cached = createClient(url, anonKey);
   return cached;

@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/client/supabase';
 
 const SESSION_STORAGE_KEY = 'pp:optimization_session_id';
 
