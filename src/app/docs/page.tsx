@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     'Full API reference for PromptPerfect: POST /api/optimize-sync, request and response schemas, examples, modes, BYOK, and rate limits.',
 };
 
-const BASE = 'https://YOUR_DEPLOYMENT.example';
+const BASE = 'https://promptperfect.vercel.app';
 
 function CodeBlock({ children }: { children: string }) {
   return (

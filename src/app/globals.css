@@ -9,6 +9,10 @@
   --accent: #4552ff;
 }
 
+.font-heading {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
