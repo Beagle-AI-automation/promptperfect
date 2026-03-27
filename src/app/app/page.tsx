@@ -17,9 +17,11 @@ import {
 import { FeedbackButtons } from '@/components/FeedbackButtons';
 import { StatsBar } from '@/components/StatsBar';
 import { AppSettingsPanel } from '@/components/AppSettingsPanel';
+import { SavePromptButton } from '@/components/SavePromptButton';
 import type { OptimizationMode, Provider } from '@/lib/types';
 
 const STORAGE_KEY = 'promptperfect:apikey';
+const REOPTIMIZE_SESSION_KEY = 'pp_reoptimize';
 const EXPLANATION_DELIMITER = '---EXPLANATION---';
 const CHANGES_DELIMITER = '---CHANGES---';
 const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
@@ -112,6 +114,25 @@ export default function AppPage() {
   useEffect(() => {
     setApiKey(loadApiKey(provider));
   }, [provider]);
+
+  useEffect(() => {
+    if (!mounted || !hydrated) return;
+    try {
+      const raw = sessionStorage.getItem(REOPTIMIZE_SESSION_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(REOPTIMIZE_SESSION_KEY);
+      const data = JSON.parse(raw) as { original_prompt?: unknown };
+      if (typeof data?.original_prompt === 'string') {
+        setInputText(data.original_prompt);
+      }
+    } catch {
+      try {
+        sessionStorage.removeItem(REOPTIMIZE_SESSION_KEY);
+      } catch {
+        // ignore
+      }
+    }
+  }, [mounted, hydrated]);
 
   useEffect(() => {
     optimizeContextRef.current.mode = selectedMode;
@@ -354,6 +375,18 @@ export default function AppPage() {
                 ) : null
               }
             />
+            {user && completion && !isLoading ? (
+              <div className="mt-2">
+                <SavePromptButton
+                  originalPrompt={inputText}
+                  optimizedPrompt={getOptimizedPromptText(completion)}
+                  explanation={explanation}
+                  mode={selectedMode}
+                  provider={provider}
+                  userId={user.id}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
