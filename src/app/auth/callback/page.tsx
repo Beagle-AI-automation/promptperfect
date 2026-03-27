@@ -42,13 +42,19 @@ export default function AuthCallbackPage() {
   }, [router, supabase])
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4">
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-[#252525] bg-gradient-to-b from-white/[0.05] to-transparent px-10 py-12">
         <div
-          className="w-6 h-6 border-2 border-[#4552FF] border-t-transparent
-                          rounded-full animate-spin"
+          className="h-8 w-8 animate-spin rounded-full border-2 border-[#252525] border-t-[#4552FF]"
+          role="status"
+          aria-label="Loading"
         />
-        <p className="text-[#B0B0B0] text-sm">Authenticating...</p>
+        <div className="text-center">
+          <p className="font-heading text-sm font-medium text-[#E7E6D9]">
+            Authenticating
+          </p>
+          <p className="mt-1 text-xs text-[#71717A]">Please wait…</p>
+        </div>
       </div>
     </div>
   )

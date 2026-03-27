@@ -298,12 +298,17 @@ export default function AppPage() {
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-[#050505] font-sans md:pr-72">
       <header className="fixed left-0 right-0 top-0 z-40 flex h-14 shrink-0 items-center border-b border-[#1a1a1a] bg-[#050505]/95 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 md:px-8">
-          <Link href="/" className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-[#ECECEC]">PromptPerfect</span>
-            <span className="text-sm text-[#666]">by Beagle</span>
+        <div className="flex w-full min-w-0 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link
+            href="/"
+            className="flex shrink-0 items-baseline gap-2 font-heading"
+          >
+            <span className="text-lg font-bold tracking-tight text-[#E7E6D9]">
+              PromptPerfect
+            </span>
+            <span className="text-sm text-[#71717A]">by Beagle</span>
           </Link>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
             <span className="hidden text-sm text-[#888] sm:inline">
               Hi, {user.name || user.email}
             </span>
@@ -368,27 +373,29 @@ export default function AppPage() {
           </div>
         </div>
 
-        {/* Mode + Optimize — below textareas, stacked */}
+        {/* Mode + Optimize — below textareas, centered column */}
         <div className="shrink-0 px-6 py-5">
-          <span className="mb-3 block text-[11px] font-medium uppercase tracking-[0.08em] text-[#666]">
-            Mode
-          </span>
-          <div className="flex w-full justify-center">
-            <AppModeSelector
-              variant="optimizer"
-              value={selectedMode}
-              onChange={setSelectedMode}
-              disabled={isLoading}
-            />
+          <div className="mx-auto flex w-full max-w-4xl flex-col items-center">
+            <span className="mb-3 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-[#71717A]">
+              Mode
+            </span>
+            <div className="flex w-full justify-center">
+              <AppModeSelector
+                variant="optimizer"
+                value={selectedMode}
+                onChange={setSelectedMode}
+                disabled={isLoading}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleOptimize}
+              disabled={!inputText.trim() || isLoading}
+              className="mt-4 flex h-12 w-full max-w-[300px] cursor-pointer items-center justify-center rounded-[12px] border-none bg-[linear-gradient(135deg,#4552FF,#5c6aff)] text-[15px] font-semibold text-white transition-opacity duration-200 ease-out hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoading ? 'Optimizing…' : 'Optimize'}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleOptimize}
-            disabled={!inputText.trim() || isLoading}
-            className="mx-auto mt-3 flex h-12 w-full max-w-[300px] cursor-pointer items-center justify-center rounded-[12px] border-none bg-[linear-gradient(135deg,#4552FF,#5c6aff)] text-[15px] font-semibold text-white transition-opacity duration-200 ease-out hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLoading ? 'Optimizing…' : 'Optimize'}
-          </button>
         </div>
 
         {error && (

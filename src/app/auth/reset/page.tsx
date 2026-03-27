@@ -4,6 +4,12 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { validatePassword } from '@/lib/auth/validation'
+import { AuthShell } from '@/components/auth/AuthShell'
+import {
+  authInputClass,
+  authLabelClass,
+  authPrimaryBtnClass,
+} from '@/components/auth/auth-styles'
 
 export default function AuthResetPage() {
   const router = useRouter()
@@ -48,56 +54,76 @@ export default function AuthResetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-gradient-to-b from-white/[0.04] to-white/[0.01] border border-[#252525] rounded-xl p-8">
-        {!success ? (
-          <>
-            <h1 className="font-heading text-2xl font-semibold text-[#E7E6D9]">
-              Set new password
-            </h1>
-            <p className="mt-2 text-sm text-[#B0B0B0]">
-              Min 8 characters, 1 uppercase, 1 number.
-            </p>
-            <form onSubmit={onSubmit} className="mt-8 space-y-4">
+    <AuthShell>
+      {!success ? (
+        <>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
+            Set new password
+          </h1>
+          <p className="mt-1.5 text-sm text-[#B0B0B0]">
+            Min 8 characters, 1 uppercase, 1 number.
+          </p>
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            <div>
+              <label htmlFor="new-password" className={authLabelClass}>
+                New password
+              </label>
               <input
+                id="new-password"
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="New password"
+                placeholder="••••••••"
                 autoComplete="new-password"
-                className="w-full bg-[#0A0A0A] border border-[#252525] text-white placeholder-[#71717A] focus:border-[#4552FF] rounded-lg p-3 outline-none"
+                className={authInputClass}
               />
+            </div>
+            <div>
+              <label htmlFor="confirm-password" className={authLabelClass}>
+                Confirm password
+              </label>
               <input
+                id="confirm-password"
                 type="password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
+                placeholder="••••••••"
                 autoComplete="new-password"
-                className="w-full bg-[#0A0A0A] border border-[#252525] text-white placeholder-[#71717A] focus:border-[#4552FF] rounded-lg p-3 outline-none"
+                className={authInputClass}
               />
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#4552FF] hover:bg-[#5B6CFF] text-white rounded-lg py-3 font-medium disabled:opacity-50"
-              >
-                {loading ? 'Updating...' : 'Update Password'}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <h1 className="font-heading text-2xl font-semibold text-[#E7E6D9]">
-              Password updated!
-            </h1>
-            <p className="mt-3 text-sm text-[#B0B0B0]">
-              Redirecting to login...
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+            </div>
+            {error && (
+              <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className={authPrimaryBtnClass}
+            >
+              {loading ? 'Updating…' : 'Update password'}
+            </button>
+          </form>
+        </>
+      ) : (
+        <>
+          <div
+            className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+            aria-hidden
+          >
+            ✓
+          </div>
+          <h1 className="text-center font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
+            Password updated
+          </h1>
+          <p className="mt-3 text-center text-sm text-[#B0B0B0]">
+            Redirecting to login…
+          </p>
+        </>
+      )}
+    </AuthShell>
   )
 }
