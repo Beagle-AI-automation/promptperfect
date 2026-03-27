@@ -1,10 +1,11 @@
 /**
  * Database Migration Script
  * Run this to create the pp_optimization_history table for the share feature
- * 
+ *
  * Usage: node supabase/migrate.js
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { createClient } = require('@supabase/supabase-js');
 
 // Load environment variables
@@ -66,7 +67,7 @@ async function runMigration() {
       console.log('⚠️  RPC method not available, trying alternative approach...\n');
       
       // Alternative: Use the Supabase client to verify table creation
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('pp_optimization_history')
         .select('id')
         .limit(1);
