@@ -14,6 +14,7 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
+import { getOAuthCallbackUrl } from '@/lib/auth/oauthRedirect';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function SignUpPage() {
     setError('');
     const { error: oAuthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: getOAuthCallbackUrl() },
     });
     if (oAuthError) setError(oAuthError.message);
   }
