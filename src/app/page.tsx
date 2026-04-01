@@ -72,12 +72,20 @@ export default function Page() {
             </p>
           </div>
 
-          <Link
-            href="/signup"
-            className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 active:scale-[0.98] sm:mt-12"
-          >
-            Try it now
-          </Link>
+          <div className="animate-fade-in animate-fade-in-delay-5 mt-10 flex flex-col items-center gap-3 sm:mt-12">
+            <Link
+              href="/app"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 active:scale-[0.98]"
+            >
+              Try it free — no sign up
+            </Link>
+            <Link
+              href="/signup"
+              className="text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              Create an account for unlimited access →
+            </Link>
+          </div>
         </section>
 
         <section
