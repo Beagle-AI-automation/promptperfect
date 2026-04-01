@@ -306,6 +306,15 @@ export default function LoginPage() {
           </>
         )}
       </p>
+
+      <div className="mt-6 border-t border-[#1a1a1a] pt-6 text-center">
+        <Link
+          href="/app"
+          className="text-sm text-[#71717A] transition hover:text-[#B0B0B0]"
+        >
+          Continue as guest — 5 free optimizations, no sign up
+        </Link>
+      </div>
     </AuthShell>
   );
 }
