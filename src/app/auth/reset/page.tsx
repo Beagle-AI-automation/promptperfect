@@ -34,20 +34,26 @@ export default function AuthResetPage() {
   useEffect(() => {
     if (!supabase) return
 
+    let didRecover = false
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        didRecover = true
         setRecoveryReady(true)
       }
     })
 
     // Fallback: if we already have an active recovery session (e.g. page reload)
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setRecoveryReady(true)
+      if (data.session) {
+        didRecover = true
+        setRecoveryReady(true)
+      }
     })
 
     // If no recovery event fires within 5 seconds, the link is invalid/expired
     const timeout = setTimeout(() => {
-      setSessionError(true)
+      if (!didRecover) setSessionError(true)
     }, 5000)
 
     return () => {
@@ -55,11 +61,6 @@ export default function AuthResetPage() {
       clearTimeout(timeout)
     }
   }, [supabase])
-
-  // Clear the session error timeout once recovery is ready
-  useEffect(() => {
-    if (recoveryReady) setSessionError(false)
-  }, [recoveryReady])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
