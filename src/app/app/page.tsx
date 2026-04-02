@@ -121,9 +121,36 @@ export default function AppPage() {
       const raw = sessionStorage.getItem(REOPTIMIZE_SESSION_KEY);
       if (!raw) return;
       sessionStorage.removeItem(REOPTIMIZE_SESSION_KEY);
-      const data = JSON.parse(raw) as { original_prompt?: unknown };
-      if (typeof data?.original_prompt === 'string') {
-        setInputText(data.original_prompt);
+      const data = JSON.parse(raw) as {
+        original_prompt?: unknown;
+        text?: unknown;
+        mode?: unknown;
+      };
+      const promptText =
+        typeof data.original_prompt === 'string'
+          ? data.original_prompt
+          : typeof data.text === 'string'
+            ? data.text
+            : null;
+      if (promptText) setInputText(promptText);
+
+      if (typeof data.mode === 'string') {
+        const m = data.mode.trim().toLowerCase();
+        const normalized =
+          m === 'chain-of-thought' || m === 'chain_of_thought' ? 'cot' : m;
+        const allowed: OptimizationMode[] = [
+          'better',
+          'specific',
+          'cot',
+          'developer',
+          'research',
+          'beginner',
+          'product',
+          'marketing',
+        ];
+        if (allowed.includes(normalized as OptimizationMode)) {
+          setSelectedMode(normalized as OptimizationMode);
+        }
       }
     } catch {
       try {
