@@ -1,41 +1,38 @@
 'use client';
 
+import { getGuestLimit } from '@/lib/guest';
+
 interface DemoTokenBarProps {
-  tokensUsed: number;
-  tokenLimit: number;
-  isGuest: boolean;
+  count: number;
 }
 
-export function DemoTokenBar({ tokensUsed, tokenLimit, isGuest }: DemoTokenBarProps) {
-  const displayUsed = Math.min(tokensUsed, tokenLimit);
-  const remaining = Math.max(0, tokenLimit - tokensUsed);
-  const pct = tokenLimit > 0 ? (displayUsed / tokenLimit) * 100 : 0;
+export function DemoTokenBar({ count }: DemoTokenBarProps) {
+  const limit = getGuestLimit();
+  const remaining = Math.max(0, limit - count);
+  const percentage = Math.min(100, (count / limit) * 100);
 
   const barColor =
-    pct >= 85
-      ? 'bg-red-500'
-      : pct >= 60
-        ? 'bg-yellow-500'
-        : 'bg-green-500';
-
-  const label = isGuest
-    ? '50 free demo tokens'
-    : '100 free tokens';
+    remaining === 0
+      ? '#EF4444'
+      : remaining === 1
+        ? '#F59E0B'
+        : '#4552FF';
 
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-900/80 px-4 py-2">
-      <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-zinc-400">
-          {label} — <span className="text-[#ECECEC]">{displayUsed}</span> used
-          {' | '}
-          <span className="text-[#ECECEC]">{remaining}</span> remaining
+    <div className="w-full max-w-[300px] mx-auto mt-3">
+      <div className="flex justify-between items-center mb-1.5">
+        <span className="text-[#B0B0B0] text-xs font-body">
+          {remaining > 0
+            ? `${count} of ${limit} free optimizations used`
+            : 'Free limit reached — sign up for unlimited'}
         </span>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-700 sm:w-40">
-          <div
-            className={`h-full transition-all duration-300 ${barColor}`}
-            style={{ width: `${Math.min(100, pct)}%` }}
-          />
-        </div>
+        <span className="text-[#71717A] text-xs">{remaining} left</span>
+      </div>
+      <div className="w-full bg-[#252525] rounded-full h-1">
+        <div
+          className="h-1 rounded-full transition-all duration-500"
+          style={{ width: `${percentage}%`, backgroundColor: barColor }}
+        />
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ PromptPerfect takes your draft prompts—whether vague, messy, or just a rough i
 
 | Component | Technology |
 | :--- | :--- |
-| **Framework** | Next.js 14 (App Router) |
+| **Framework** | Next.js 16.1.6 (App Router) |
 | **Language** | TypeScript |
 | **Styling** | Tailwind CSS + shadcn/ui |
 | **AI Integration** | Vercel AI SDK |
