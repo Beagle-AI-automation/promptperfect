@@ -182,6 +182,7 @@ export default function AppPage() {
         prompt_optimized: optimizedTextFromFullCompletion(completion),
         mode: optimizeContextRef.current.mode,
         explanation: explanationTextFromFullCompletion(completion),
+        provider,
       });
       setHistoryId(histId);
     },
@@ -307,6 +308,7 @@ export default function AppPage() {
             prompt_optimized: (optimizedText ?? '').trim(),
             mode: selectedMode,
             explanation: (expl ?? '').trim(),
+            provider,
           });
           setHistoryId(histId);
         })
@@ -315,7 +317,16 @@ export default function AppPage() {
         )
         .finally(() => setSyncLoading(false));
     }
-  }, [inputText, selectedMode, provider, apiKey, hasApiKey, isGemini, complete, user]);
+  }, [
+    inputText,
+    selectedMode,
+    provider,
+    apiKey,
+    hasApiKey,
+    isGemini,
+    complete,
+    user,
+  ]);
 
   const [selectedHistoryItem, setSelectedHistoryItem] =
     useState<OptimizationHistoryItem | null>(null);
@@ -389,6 +400,12 @@ export default function AppPage() {
                 <span className="hidden text-sm text-[#888] sm:inline">
                   Hi, {user.name || user.email}
                 </span>
+                <Link
+                  href="/profile"
+                  className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
+                >
+                  Profile
+                </Link>
                 <button
                   type="button"
                   onClick={() => setSettingsOpen(true)}
@@ -524,12 +541,13 @@ export default function AppPage() {
         />
       )}
 
-      {!isGuest && (
+      {!isGuest && user && (
         <aside className="fixed bottom-0 right-0 top-14 z-30 hidden h-[calc(100vh-3.5rem)] w-72 md:block">
           <HistoryPanel
             onSelect={handleHistorySelect}
             refreshTrigger={historyRefresh}
             selectedId={selectedHistoryItem?.id ?? null}
+            userId={user.id}
           />
         </aside>
       )}

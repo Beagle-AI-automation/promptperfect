@@ -54,6 +54,10 @@ export default function SignUpPage() {
     }
     setLoading(true);
     try {
+      const guestId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('pp_guest_id')?.trim() || undefined
+          : undefined;
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,12 +65,17 @@ export default function SignUpPage() {
           name: name.trim() || undefined,
           email: email.trim(),
           password,
+          ...(guestId ? { guestId } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Sign up failed');
         return;
+      }
+      if (data.guestMigrated === true) {
+        const { clearGuestSession } = await import('@/lib/guest');
+        clearGuestSession();
       }
       const user = data.user as {
         id: string;

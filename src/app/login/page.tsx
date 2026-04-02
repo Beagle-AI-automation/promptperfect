@@ -52,6 +52,11 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
+      const guestId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('pp_guest_id')?.trim() || undefined
+          : undefined;
+
       if (mode === 'signup') {
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
@@ -60,12 +65,17 @@ export default function LoginPage() {
             name: name.trim() || undefined,
             email: email.trim(),
             password,
+            ...(guestId ? { guestId } : {}),
           }),
         });
         const data = await res.json();
         if (!res.ok) {
           setError(data.error || 'Sign up failed');
           return;
+        }
+        if (data.guestMigrated === true) {
+          const { clearGuestSession } = await import('@/lib/guest');
+          clearGuestSession();
         }
         const user = data.user as {
           id: string;
@@ -82,7 +92,7 @@ export default function LoginPage() {
             email: user.email,
             provider: user.provider ?? 'gemini',
             model: user.model ?? 'gemini-2.0-flash',
-          })
+          }),
         );
         router.push('/control-room');
         return;
@@ -91,12 +101,20 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          ...(guestId ? { guestId } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Invalid email or password');
         return;
+      }
+      if (data.guestMigrated === true) {
+        const { clearGuestSession } = await import('@/lib/guest');
+        clearGuestSession();
       }
       if (
         supabase &&
