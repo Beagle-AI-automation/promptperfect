@@ -43,9 +43,35 @@ export function setGuestCount(count: number, storage?: Storage): void {
   s.setItem(GUEST_TOKENS_KEY, String(Math.max(0, Math.floor(count))));
 }
 
+/** Clear guest id and usage from storage (e.g. after migrating guest to a signed-in user). */
+export function clearGuestSession(storage?: Storage): void {
+  const s = getStorage(storage);
+  if (!s) return;
+  s.removeItem(GUEST_ID_KEY);
+  s.removeItem(GUEST_TOKENS_KEY);
+}
+
+/** Max free optimizations for an anonymous guest (matches product copy). */
+export function getGuestLimit(): number {
+  return GUEST_TOKEN_LIMIT;
+}
+
+/**
+ * Increment stored guest usage by `delta` (default 1). Returns the new total.
+ */
+export function incrementGuestCount(delta: number = 1, storage?: Storage): number {
+  const next = getGuestCount(storage) + Math.max(0, Math.floor(delta));
+  setGuestCount(next, storage);
+  return next;
+}
+
+/**
+ * When `tokensUsed` is omitted, uses the value from `getGuestCount()`.
+ */
 export function isGuestLimitReached(
-  tokensUsed: number,
+  tokensUsed?: number,
   limit: number = GUEST_TOKEN_LIMIT,
 ): boolean {
-  return tokensUsed >= limit;
+  const used = tokensUsed !== undefined ? tokensUsed : getGuestCount();
+  return used >= limit;
 }

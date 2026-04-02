@@ -1,62 +1,44 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DemoLimitModal } from "./DemoLimitModal";
 
+const push = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
+
 describe("DemoLimitModal", () => {
-  it("renders nothing when open is false", () => {
+  beforeEach(() => {
+    push.mockClear();
+  });
+
+  it("renders nothing when isOpen is false", () => {
     const { container } = render(
-      <DemoLimitModal
-        open={false}
-        onClose={() => {}}
-        isGuest={true}
-        message="Limit reached"
-      />
+      <DemoLimitModal isOpen={false} onClose={() => {}} />
     );
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows message and Sign Up for guests when open", () => {
-    render(
-      <DemoLimitModal
-        open={true}
-        onClose={() => {}}
-        isGuest={true}
-        message="You have used all demo tokens."
-      />
+  it("shows limit copy and navigation actions when open", () => {
+    render(<DemoLimitModal isOpen onClose={() => {}} />);
+    expect(
+      screen.getByRole("heading", {
+        name: /you've used all 5 free optimizations/i,
+      })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /sign up free/i }));
+    expect(push).toHaveBeenCalledWith("/signup");
+    fireEvent.click(
+      screen.getByRole("button", { name: /already have an account/i })
     );
-    expect(screen.getByText("You have used all demo tokens.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /sign up/i })).toHaveAttribute(
-      "href",
-      "/signup"
-    );
+    expect(push).toHaveBeenCalledWith("/login");
   });
 
-  it("shows Open Settings for authenticated users when open", () => {
+  it("calls onClose when Maybe later is clicked", () => {
     const onClose = vi.fn();
-    render(
-      <DemoLimitModal
-        open={true}
-        onClose={onClose}
-        isGuest={false}
-        message="Upgrade needed"
-      />
-    );
-    expect(screen.getByText("Upgrade needed")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it("calls onClose when Close is clicked", () => {
-    const onClose = vi.fn();
-    render(
-      <DemoLimitModal
-        open={true}
-        onClose={onClose}
-        isGuest={true}
-        message="Done"
-      />
-    );
-    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
-    expect(onClose).toHaveBeenCalled();
+    render(<DemoLimitModal isOpen onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: /maybe later/i }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

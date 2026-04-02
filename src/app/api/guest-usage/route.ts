@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+import { getSupabaseClient } from '@/lib/supabase'
 
 const GUEST_LIMIT = 5
 
 export async function POST(request: Request) {
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return NextResponse.json(
+      { error: 'Database not configured' },
+      { status: 503 }
+    )
+  }
+
   const { guestId, mode, provider } = await request.json() as {
     guestId?: string
     mode?: string
@@ -55,10 +58,15 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const supabase = getSupabaseClient()
   const { searchParams } = new URL(request.url)
   const guestId = searchParams.get('guestId')
 
   if (!guestId) {
+    return NextResponse.json({ count: 0, limit: GUEST_LIMIT, remaining: GUEST_LIMIT })
+  }
+
+  if (!supabase) {
     return NextResponse.json({ count: 0, limit: GUEST_LIMIT, remaining: GUEST_LIMIT })
   }
 

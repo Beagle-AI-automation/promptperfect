@@ -13,7 +13,7 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
-
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.54",

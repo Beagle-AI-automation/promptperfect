@@ -3,7 +3,10 @@ import {
   GUEST_TOKEN_LIMIT,
   getGuestId,
   getGuestCount,
+  getGuestLimit,
   setGuestCount,
+  incrementGuestCount,
+  clearGuestSession,
   isGuestLimitReached,
 } from "./guest";
 
@@ -53,5 +56,25 @@ describe("guest utilities", () => {
     expect(isGuestLimitReached(49, GUEST_TOKEN_LIMIT)).toBe(false);
     expect(isGuestLimitReached(50, GUEST_TOKEN_LIMIT)).toBe(true);
     expect(isGuestLimitReached(51, GUEST_TOKEN_LIMIT)).toBe(true);
+  });
+
+  it("getGuestLimit matches constant", () => {
+    expect(getGuestLimit()).toBe(GUEST_TOKEN_LIMIT);
+  });
+
+  it("incrementGuestCount bumps stored count", () => {
+    setGuestCount(5, storage);
+    expect(incrementGuestCount(2, storage)).toBe(7);
+    expect(getGuestCount(storage)).toBe(7);
+    expect(incrementGuestCount(1, storage)).toBe(8);
+  });
+
+  it("clearGuestSession removes id and token count", () => {
+    getGuestId(storage);
+    setGuestCount(3, storage);
+    clearGuestSession(storage);
+    expect(storage.getItem("pp_guest_id")).toBeNull();
+    expect(storage.getItem("pp_guest_tokens_used")).toBeNull();
+    expect(getGuestCount(storage)).toBe(0);
   });
 });
