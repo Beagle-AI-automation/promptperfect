@@ -9,7 +9,7 @@ const CHANGES_DELIMITER = "---CHANGES---";
 const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
 
 const optimizerTextarea =
-  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif]";
+  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif] whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere";
 
 export interface StreamingPromptOutputProps {
   text: string;
@@ -162,7 +162,7 @@ export function StreamingPromptOutput({
         value={optimized}
         rows={12}
         aria-label="Optimized prompt output"
-        className="min-h-[200px] w-full resize-y rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3.5 font-mono text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+        className="min-h-[200px] w-full resize-y rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3.5 font-mono text-sm text-zinc-900 whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
       />
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
         {outLen} characters · est. {tokEst} tokens

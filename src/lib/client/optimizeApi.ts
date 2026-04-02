@@ -1,5 +1,4 @@
 import type { Mode, ProviderId } from '@/lib/types';
-import { saveToHistory } from '@/lib/client/optimizationHistory';
 
 export interface OptimizeApiArgs {
   prompt: string;
@@ -60,12 +59,6 @@ export async function postOptimizeSync(args: OptimizeApiArgs): Promise<OptimizeS
 
   if (!res.ok) throw new Error(await readErrorMessage(res));
   const result = (await res.json()) as OptimizeSyncResult;
-  void saveToHistory({
-    prompt_original: args.prompt.trim(),
-    prompt_optimized: result.optimizedText ?? '',
-    mode: args.mode,
-    explanation: result.explanation ?? '',
-  });
   return result;
 }
 

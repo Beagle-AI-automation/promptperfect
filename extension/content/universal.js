@@ -34,11 +34,11 @@
         sel.addRange(range);
         document.execCommand('delete', false, null);
         document.execCommand('insertText', false, text);
-      } catch (e1) {
+      } catch {
         try {
           el.innerText = text;
           el.textContent = text;
-        } catch (e2) {
+        } catch {
           el.textContent = text;
         }
       }
@@ -181,7 +181,7 @@
     if (el && isTextInput(el)) scheduleHide();
   }, true);
 
-  observer = new MutationObserver((mutations) => {
+  observer = new MutationObserver(() => {
     if (!currentTarget) return;
     if (!document.contains(currentTarget)) {
       hideButton();

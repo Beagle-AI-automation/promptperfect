@@ -15,7 +15,7 @@ export interface PromptInputProps {
 }
 
 const optimizerTextarea =
-  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif]";
+  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif] whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere";
 
 export function PromptInput({
   value,
@@ -128,7 +128,7 @@ export function PromptInput({
         placeholder={placeholder}
         disabled={disabled}
         rows={6}
-        className="min-h-[140px] w-full max-w-full resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-base text-zinc-900 placeholder-zinc-500 transition-colors focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20 disabled:opacity-50 box-border"
+        className="min-h-[140px] w-full max-w-full resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-base text-zinc-900 placeholder-zinc-500 whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere transition-colors focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500/20 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-zinc-400 dark:focus:ring-zinc-400/20 disabled:opacity-50 box-border"
       />
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         {len} characters · est. {tokEst} tokens
