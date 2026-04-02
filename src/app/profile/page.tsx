@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
@@ -34,36 +34,42 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState('');
 
-  const load = useCallback(async () => {
-    if (!supabase) {
-      router.push('/login');
-      return;
-    }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
-    const profileData = await ensureUserProfile(user);
-    const statsData = await getUserStats(user.id);
-
-    if (profileData) {
-      setProfile(profileData);
-      setDisplayName(profileData.display_name);
-      setAvatarUrl(profileData.avatar_url ?? '');
-    }
-    setStats(statsData);
-    setLoading(false);
-  }, [router, supabase]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+
+    void (async () => {
+      if (!supabase) {
+        router.push('/login');
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const profileData = await ensureUserProfile(user);
+      const statsData = await getUserStats(user.id);
+
+      if (cancelled) return;
+      if (profileData) {
+        setProfile(profileData);
+        setDisplayName(profileData.display_name);
+        setAvatarUrl(profileData.avatar_url ?? '');
+      }
+      setStats(statsData);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, supabase]);
 
   const handleSave = async () => {
     if (!profile || !supabase) return;

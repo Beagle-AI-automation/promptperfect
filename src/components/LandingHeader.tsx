@@ -9,11 +9,14 @@ export function LandingHeader() {
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    try {
-      setSignedIn(!!localStorage.getItem(PP_USER_KEY)?.trim());
-    } catch {
-      setSignedIn(false);
-    }
+    const read = () => {
+      try {
+        setSignedIn(!!localStorage.getItem(PP_USER_KEY)?.trim());
+      } catch {
+        setSignedIn(false);
+      }
+    };
+    queueMicrotask(read);
     const onStorage = (e: StorageEvent) => {
       if (e.key === PP_USER_KEY || e.key === null) {
         try {
