@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { migrateGuestHistoryAdmin } from '@/lib/server/guestHistoryMigration';
 
 async function sha256Hex(text: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -15,6 +16,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
+    const guestId =
+      typeof body.guestId === 'string' ? body.guestId.trim() : '';
 
     if (!email || !password) {
       return NextResponse.json(
@@ -52,6 +55,12 @@ export async function POST(request: Request) {
       );
     }
 
+    let guestMigrated = false;
+    if (guestId) {
+      const { error: migErr } = await migrateGuestHistoryAdmin(user.id, guestId);
+      guestMigrated = !migErr;
+    }
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -60,6 +69,7 @@ export async function POST(request: Request) {
         provider: user.provider,
         model: user.model,
       },
+      guestMigrated,
     });
   } catch {
     return NextResponse.json(

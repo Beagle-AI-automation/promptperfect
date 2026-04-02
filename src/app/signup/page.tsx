@@ -27,15 +27,28 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       const password_hash = await sha256Hex(password);
+      const guestId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('pp_guest_id')?.trim() || undefined
+          : undefined;
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || undefined, email: email.trim(), password_hash }),
+        body: JSON.stringify({
+          name: name.trim() || undefined,
+          email: email.trim(),
+          password_hash,
+          ...(guestId ? { guestId } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Sign up failed');
         return;
+      }
+      if (data.guestMigrated === true) {
+        const { clearGuestSession } = await import('@/lib/guest');
+        clearGuestSession();
       }
       const user = data.user as { id: string; name: string | null; email: string; provider: string; model: string };
       localStorage.setItem(

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { migrateGuestHistoryAdmin } from '@/lib/server/guestHistoryMigration';
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +8,8 @@ export async function POST(request: Request) {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const password_hash = typeof body.password_hash === 'string' ? body.password_hash : '';
+    const guestId =
+      typeof body.guestId === 'string' ? body.guestId.trim() : '';
 
     if (!email || !password_hash) {
       return NextResponse.json(
@@ -49,6 +52,12 @@ export async function POST(request: Request) {
       );
     }
 
+    let guestMigrated = false;
+    if (guestId && data?.id) {
+      const { error: migErr } = await migrateGuestHistoryAdmin(data.id, guestId);
+      guestMigrated = !migErr;
+    }
+
     return NextResponse.json({
       user: {
         id: data.id,
@@ -57,6 +66,7 @@ export async function POST(request: Request) {
         provider: data.provider,
         model: data.model,
       },
+      guestMigrated,
     });
   } catch {
     return NextResponse.json(

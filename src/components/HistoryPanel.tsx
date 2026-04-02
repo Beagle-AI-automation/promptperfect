@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/client/supabase';
 import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
 
 export interface OptimizationHistoryItem {
@@ -18,6 +18,8 @@ interface HistoryPanelProps {
   onSelect: (item: OptimizationHistoryItem) => void;
   refreshTrigger?: number;
   selectedId?: string | null;
+  /** When set, load rows for this user (`user_id`). */
+  userId?: string | null;
 }
 
 function formatTime(iso: string): string {
@@ -38,14 +40,21 @@ export function HistoryPanel({
   onSelect,
   refreshTrigger = 0,
   selectedId = null,
+  userId = null,
 }: HistoryPanelProps) {
   const [rows, setRows] = useState<OptimizationHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const client = getSupabaseClient();
+    if (!client) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     const sid = getOrCreateSessionId();
-    if (!client || !sid) {
+    if (!userId && !sid) {
       setRows([]);
       setLoading(false);
       return;
@@ -53,12 +62,21 @@ export function HistoryPanel({
 
     setLoading(true);
     try {
-      const { data, error } = await client
+      let q = client
         .from('pp_optimization_history')
-        .select('id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at')
-        .eq('session_id', sid)
+        .select(
+          'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
+        )
         .order('created_at', { ascending: false })
         .limit(20);
+
+      if (userId) {
+        q = q.eq('user_id', userId);
+      } else {
+        q = q.eq('session_id', sid);
+      }
+
+      const { data, error } = await q;
 
       if (error) throw error;
       setRows((data as OptimizationHistoryItem[]) ?? []);
@@ -67,10 +85,10 @@ export function HistoryPanel({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    void load();
+    queueMicrotask(() => void load());
   }, [load, refreshTrigger]);
 
   return (
