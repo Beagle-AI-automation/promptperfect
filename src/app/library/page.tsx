@@ -36,17 +36,6 @@ function previewText(text: string): string {
   return `${t.slice(0, PREVIEW_LEN)}…`;
 }
 
-function formatCreated(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  } catch {
-    return iso;
-  }
-}
-
 function rowMatchesSearch(row: SavedPromptRow, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
