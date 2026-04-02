@@ -53,6 +53,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === 'signup') {
+        const guestId =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('pp_guest_id')?.trim() || undefined
+            : undefined;
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -60,12 +64,17 @@ export default function LoginPage() {
             name: name.trim() || undefined,
             email: email.trim(),
             password,
+            ...(guestId ? { guestId } : {}),
           }),
         });
         const data = await res.json();
         if (!res.ok) {
           setError(data.error || 'Sign up failed');
           return;
+        }
+        if (data.guestMigrated === true) {
+          const { clearGuestSession } = await import('@/lib/guest');
+          clearGuestSession();
         }
         const user = data.user as {
           id: string;
@@ -126,6 +135,17 @@ export default function LoginPage() {
           model: user.model,
         })
       );
+
+      const guestId = localStorage.getItem('pp_guest_id')?.trim();
+      if (guestId && supabase) {
+        const { migrateGuestHistory } = await import('@/lib/client/userProfile');
+        const { error: migErr } = await migrateGuestHistory(supabase, guestId);
+        if (!migErr) {
+          const { clearGuestSession } = await import('@/lib/guest');
+          clearGuestSession();
+        }
+      }
+
       router.push('/app');
     } catch {
       setError('Something went wrong');

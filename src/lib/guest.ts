@@ -32,3 +32,10 @@ export function isGuestLimitReached(): boolean {
 export function getGuestLimit(): number {
   return GUEST_LIMIT
 }
+
+/** After guest data is migrated to a signed-in account. */
+export function clearGuestSession(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(GUEST_ID_KEY)
+  localStorage.removeItem(GUEST_COUNT_KEY)
+}

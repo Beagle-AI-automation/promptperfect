@@ -26,6 +26,7 @@ async function safeSaveToHistory(params: {
   prompt_optimized: string;
   mode: string;
   explanation: string;
+  provider?: string;
 }): Promise<string | null> {
   try {
     return await saveToHistory(params);
@@ -150,6 +151,7 @@ export function useOptimizePrompt() {
             prompt_optimized: data.optimizedText,
             mode: args.mode,
             explanation: data.explanation,
+            provider: data.provider ?? args.provider,
           });
 
           setState((s) => ({ ...s, historyId }));
@@ -202,6 +204,7 @@ export function useOptimizePrompt() {
           prompt_optimized: optimizedText,
           mode: args.mode,
           explanation,
+          provider,
         });
 
         setState((s) => ({ ...s, isLoading: false, historyId }));

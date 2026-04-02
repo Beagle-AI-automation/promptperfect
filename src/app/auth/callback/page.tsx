@@ -18,27 +18,44 @@ export default function AuthCallbackPage() {
       router.push('/login')
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        const u = data.session.user
-        localStorage.setItem(
-          'pp_user',
-          JSON.stringify({
-            id: u.id,
-            name:
-              (u.user_metadata?.full_name as string | undefined) ??
-              (u.user_metadata?.name as string | undefined) ??
-              null,
-            email: u.email ?? '',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash',
-          })
-        )
-        router.push('/app')
-      } else {
+
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      if (!data.session?.user) {
         router.push('/login')
+        return
       }
-    })
+
+      const u = data.session.user
+      const guestId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('pp_guest_id')?.trim()
+          : ''
+
+      if (guestId) {
+        const { migrateGuestHistory } = await import('@/lib/client/userProfile')
+        const { error } = await migrateGuestHistory(supabase, guestId)
+        if (!error) {
+          const { clearGuestSession } = await import('@/lib/guest')
+          clearGuestSession()
+        }
+      }
+
+      localStorage.setItem(
+        'pp_user',
+        JSON.stringify({
+          id: u.id,
+          name:
+            (u.user_metadata?.full_name as string | undefined) ??
+            (u.user_metadata?.name as string | undefined) ??
+            null,
+          email: u.email ?? '',
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+        }),
+      )
+      router.push('/app')
+    })()
   }, [router, supabase])
 
   return (

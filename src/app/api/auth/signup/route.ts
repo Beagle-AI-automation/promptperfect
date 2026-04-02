@@ -1,5 +1,6 @@
 import { validatePassword, validateEmail } from '@/lib/auth/validation'
 import { checkRateLimit } from '@/lib/auth/rateLimit'
+import { migrateGuestHistoryAdmin } from '@/lib/server/guestHistoryMigration'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
   const email = typeof body.email === 'string' ? body.email.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
   const name = typeof body.name === 'string' ? body.name.trim() : ''
+  const guestId =
+    typeof body.guestId === 'string' ? body.guestId.trim() : ''
 
   if (!validateEmail(email)) {
     return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
@@ -68,6 +71,12 @@ export async function POST(request: Request) {
     }
   }
 
+  let guestMigrated = false
+  if (uid && guestId) {
+    const { error: migErr } = await migrateGuestHistoryAdmin(uid, guestId)
+    guestMigrated = !migErr
+  }
+
   const { data: profile } = await supabase
     .from('pp_users')
     .select('id, name, email, provider, model')
@@ -76,5 +85,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     user: profile ?? data.user,
+    guestMigrated,
   })
 }
