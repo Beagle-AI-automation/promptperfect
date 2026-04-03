@@ -53,9 +53,9 @@ describe("guest utilities", () => {
   });
 
   it("isGuestLimitReached respects limit", () => {
-    expect(isGuestLimitReached(49, GUEST_TOKEN_LIMIT)).toBe(false);
-    expect(isGuestLimitReached(50, GUEST_TOKEN_LIMIT)).toBe(true);
-    expect(isGuestLimitReached(51, GUEST_TOKEN_LIMIT)).toBe(true);
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT - 1, GUEST_TOKEN_LIMIT)).toBe(false);
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT, GUEST_TOKEN_LIMIT)).toBe(true);
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT + 1, GUEST_TOKEN_LIMIT)).toBe(true);
   });
 
   it("getGuestLimit matches constant", () => {

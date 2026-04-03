@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { clearGuestSession } from '@/lib/guest'
 
 export default function AuthCallbackPage() {
   const router = useRouter()
@@ -18,9 +19,25 @@ export default function AuthCallbackPage() {
       router.push('/login')
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         const u = data.session.user
+
+        // Migrate any guest optimizations to the newly authenticated account
+        const guestId = localStorage.getItem('pp_guest_id')?.trim()
+        if (guestId) {
+          try {
+            await fetch('/api/guest-migrate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: u.id, guestId }),
+            })
+          } catch {
+            // Non-fatal: migration failure should not block sign-in
+          }
+          clearGuestSession()
+        }
+
         localStorage.setItem(
           'pp_user',
           JSON.stringify({

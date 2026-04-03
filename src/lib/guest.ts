@@ -1,5 +1,5 @@
-/** Demo token cap for anonymous sessions (aligns with `pp_guest_sessions.token_limit`). */
-export const GUEST_TOKEN_LIMIT = 50;
+/** Max free optimizations for anonymous guests before signup is required. */
+export const GUEST_TOKEN_LIMIT = 5;
 
 const GUEST_ID_KEY = 'pp_guest_id';
 const GUEST_TOKENS_KEY = 'pp_guest_tokens_used';

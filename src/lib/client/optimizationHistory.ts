@@ -1,5 +1,4 @@
 import { getGuestId } from '@/lib/guest';
-import { getSupabaseClient } from '@/lib/client/supabase';
 
 const PP_USER_KEY = 'pp_user';
 
@@ -24,8 +23,9 @@ export function explanationTextFromFullCompletion(fullText: string): string {
 }
 
 /**
- * History `session_id`: signed-in users use stable `pp_users.id`; guests use `pp_guest_id`
- * so rows can be migrated on signup.
+ * History session_id:
+ *   - Signed-in users → stable user UUID (so HistoryPanel can query by user_id)
+ *   - Guests         → pp_guest_id UUID (so migrateGuestHistory can claim rows on signup)
  */
 export function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return '';
@@ -43,6 +43,24 @@ export function getOrCreateSessionId(): string {
   return getGuestId();
 }
 
+function readUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PP_USER_KEY);
+    if (raw) {
+      const u = JSON.parse(raw) as { id?: string };
+      if (typeof u?.id === 'string' && u.id.trim()) return u.id.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Saves an optimization to history via the server-side /api/save-history route,
+ * which uses the service key and handles pp_users sync — no client-side FK fragility.
+ */
 export async function saveToHistory(params: {
   prompt_original: string;
   prompt_optimized: string;
@@ -50,44 +68,33 @@ export async function saveToHistory(params: {
   explanation: string;
   provider?: string;
 }): Promise<string | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
+  if (typeof window === 'undefined') return null;
 
   const session_id = getOrCreateSessionId();
   if (!session_id) return null;
 
-  let user_id: string | null = null;
-  try {
-    const raw = localStorage.getItem(PP_USER_KEY);
-    if (raw) {
-      const u = JSON.parse(raw) as { id?: string };
-      if (typeof u?.id === 'string' && u.id.trim()) user_id = u.id.trim();
-    }
-  } catch {
-    user_id = null;
-  }
-
-  const row: Record<string, unknown> = {
-    session_id,
-    prompt_original: params.prompt_original,
-    prompt_optimized: params.prompt_optimized,
-    mode: params.mode,
-    explanation: params.explanation,
-  };
-  if (user_id) row.user_id = user_id;
-  if (params.provider) row.provider = params.provider;
+  const user_id = readUserId();
 
   try {
-    const { data, error } = await client
-      .from('pp_optimization_history')
-      .insert(row)
-      .select('id')
-      .single();
+    const res = await fetch('/api/save-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id,
+        user_id,
+        prompt_original: params.prompt_original,
+        prompt_optimized: params.prompt_optimized,
+        mode: params.mode,
+        explanation: params.explanation,
+        provider: params.provider ?? null,
+      }),
+    });
 
-    if (error || !data) return null;
-    return data.id;
+    if (!res.ok) return null;
+    const data = await res.json() as { id?: string };
+    return data.id ?? null;
   } catch {
-    // non-blocking
     return null;
   }
 }
+
