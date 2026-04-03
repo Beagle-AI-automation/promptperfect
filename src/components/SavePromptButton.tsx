@@ -1,5 +1,6 @@
 'use client';
 
+import { Bookmark, BookmarkCheck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -45,7 +46,8 @@ export function SavePromptButton({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -67,7 +69,7 @@ export function SavePromptButton({
   const resetFlow = useCallback(() => {
     setOpen(false);
     setTitle('');
-    setStatus('idle');
+    setError(false);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -78,14 +80,14 @@ export function SavePromptButton({
 
     const client = getSupabaseClient();
     if (!client) {
-      setStatus('error');
+      setError(true);
       return;
     }
 
     setSaving(true);
-    setStatus('idle');
+    setError(false);
     try {
-      const { error } = await client.from('pp_saved_prompts').insert({
+      const { error: insertError } = await client.from('pp_saved_prompts').insert({
         user_id: uid,
         title: t,
         original_prompt: originalPrompt,
@@ -94,13 +96,11 @@ export function SavePromptButton({
         mode,
         provider,
       });
-      if (error) throw error;
-      setStatus('saved');
-      setTimeout(() => {
-        resetFlow();
-      }, 1200);
+      if (insertError) throw insertError;
+      resetFlow();
+      setSavedFlash(true);
     } catch {
-      setStatus('error');
+      setError(true);
     } finally {
       setSaving(false);
     }
@@ -116,61 +116,74 @@ export function SavePromptButton({
     resetFlow,
   ]);
 
+  useEffect(() => {
+    if (!savedFlash) return;
+    const id = window.setTimeout(() => setSavedFlash(false), 3000);
+    return () => window.clearTimeout(id);
+  }, [savedFlash]);
+
   if (!mounted || !resolvedUserId) {
     return null;
   }
 
-  const baseBtn =
-    'rounded-md border border-transparent px-2 py-0.5 text-[12px] font-medium text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC] disabled:cursor-not-allowed disabled:opacity-50';
+  if (savedFlash) {
+    return (
+      <span className={`inline-flex items-center gap-2 text-sm text-green-400 ${className}`}>
+        <BookmarkCheck size={16} strokeWidth={1.5} aria-hidden />
+        Saved!
+      </span>
+    );
+  }
 
-  return (
-    <span className={`inline-flex max-w-full flex-wrap items-center gap-1.5 align-middle ${className}`}>
-      {!open ? (
+  if (open) {
+    return (
+      <span className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void handleSave();
+            if (e.key === 'Escape') resetFlow();
+          }}
+          placeholder="Name this prompt…"
+          disabled={saving}
+          autoFocus
+          aria-label="Prompt title"
+          className="w-48 max-w-[min(12rem,70vw)] rounded-lg border border-[#252525] bg-[#0A0A0A] px-3 py-1.5 text-sm text-white outline-none placeholder:text-[#71717A] focus:border-[#4552FF]"
+        />
         <button
           type="button"
-          onClick={() => {
-            setOpen(true);
-            setStatus('idle');
-          }}
-          className={baseBtn}
+          onClick={() => void handleSave()}
+          disabled={saving || !title.trim()}
+          className="text-sm text-[#4552FF] hover:underline disabled:opacity-50"
         >
-          Save to Library
+          {saving ? 'Saving…' : 'Save'}
         </button>
-      ) : (
-        <>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleSave();
-              if (e.key === 'Escape') resetFlow();
-            }}
-            placeholder="Title"
-            disabled={saving}
-            autoFocus
-            aria-label="Save title"
-            className="min-w-[8rem] max-w-[12rem] rounded border border-[#2a2a2a] bg-[#0f0f0f] px-2 py-0.5 text-[12px] text-[#ECECEC] outline-none placeholder:text-[#555] focus:border-[#4552FF]"
-          />
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || !title.trim()}
-            className={baseBtn}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button type="button" onClick={resetFlow} disabled={saving} className={baseBtn}>
-            Cancel
-          </button>
-          {status === 'saved' && (
-            <span className="text-[11px] text-[#22c55e]">Saved</span>
-          )}
-          {status === 'error' && (
-            <span className="text-[11px] text-red-400">Couldn’t save</span>
-          )}
-        </>
-      )}
-    </span>
+        <button
+          type="button"
+          onClick={resetFlow}
+          disabled={saving}
+          className="text-sm text-[#71717A] hover:underline"
+        >
+          Cancel
+        </button>
+        {error ? <span className="text-[11px] text-red-400">Couldn’t save</span> : null}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setOpen(true);
+        setError(false);
+      }}
+      className={`inline-flex items-center gap-2 text-sm text-[#B0B0B0] transition hover:text-[#4552FF] ${className}`}
+    >
+      <Bookmark size={16} strokeWidth={1.5} aria-hidden />
+      Save to Library
+    </button>
   );
 }
