@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/client/supabase';
-import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
+import {
+  getLocalHistoryForSession,
+  getOrCreateSessionId,
+} from '@/lib/client/optimizationHistory';
 
 export interface OptimizationHistoryItem {
   id: string;
@@ -53,6 +56,16 @@ export function HistoryPanel({
 
     setLoading(true);
     try {
+      const localRows = getLocalHistoryForSession(sid);
+      if (!client) {
+        const merged = [...localRows].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setRows(merged.slice(0, 20));
+        return;
+      }
+
       const { data, error } = await client
         .from('pp_optimization_history')
         .select('id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at')
@@ -61,9 +74,19 @@ export function HistoryPanel({
         .limit(20);
 
       if (error) throw error;
-      setRows((data as OptimizationHistoryItem[]) ?? []);
+      const remote = (data as OptimizationHistoryItem[]) ?? [];
+      const merged = [...remote, ...localRows].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      setRows(merged.slice(0, 20));
     } catch {
-      setRows([]);
+      const localRows = getLocalHistoryForSession(sid);
+      const merged = [...localRows].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      setRows(merged.slice(0, 20));
     } finally {
       setLoading(false);
     }

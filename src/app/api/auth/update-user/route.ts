@@ -33,15 +33,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const { error } = await supabase
+    const { data: updatedRow, error } = await supabase
       .from('pp_users')
       .update(updates)
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id')
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
         { error: error.message || 'Update failed' },
         { status: 500 }
+      );
+    }
+
+    if (!updatedRow) {
+      return NextResponse.json(
+        { error: 'User profile not found' },
+        { status: 404 }
       );
     }
 

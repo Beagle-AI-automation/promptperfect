@@ -76,6 +76,17 @@ export default function SignUpPage() {
         provider?: string;
         model?: string;
       };
+      if (
+        supabase &&
+        data.session &&
+        typeof data.session.access_token === 'string' &&
+        typeof data.session.refresh_token === 'string'
+      ) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
       localStorage.setItem(
         'pp_user',
         JSON.stringify({

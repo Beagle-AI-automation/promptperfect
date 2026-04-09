@@ -43,7 +43,8 @@ export async function POST(request: Request) {
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
-    email_confirm: false,
+    // Must be confirmed or signInWithPassword (and “sign in”) fails on default Supabase settings.
+    email_confirm: true,
   })
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })
@@ -74,7 +75,42 @@ export async function POST(request: Request) {
     .eq('email', email)
     .maybeSingle()
 
+  const userPayload =
+    profile ??
+    (data.user
+      ? {
+          id: data.user.id,
+          name: name || null,
+          email: data.user.email ?? email,
+          provider: 'gemini' as const,
+          model: 'gemini-2.0-flash' as const,
+        }
+      : null)
+
+  if (!userPayload) {
+    return NextResponse.json(
+      { error: 'Account created but profile could not be loaded' },
+      { status: 500 }
+    )
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  let session: { access_token: string; refresh_token: string } | undefined
+  if (url && anonKey) {
+    const authClient = createClient(url, anonKey)
+    const { data: signInData, error: signInErr } =
+      await authClient.auth.signInWithPassword({ email, password })
+    if (!signInErr && signInData.session) {
+      session = {
+        access_token: signInData.session.access_token,
+        refresh_token: signInData.session.refresh_token,
+      }
+    }
+  }
+
   return NextResponse.json({
-    user: profile ?? data.user,
+    user: userPayload,
+    ...(session ? { session } : {}),
   })
 }

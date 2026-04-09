@@ -1,6 +1,8 @@
 import { getSupabaseClient } from '@/lib/client/supabase';
 
 const SESSION_STORAGE_KEY = 'pp:optimization_session_id';
+const LOCAL_HISTORY_KEY = 'pp:optimization_history_local';
+const LOCAL_HISTORY_CAP = 100;
 
 const EXPLANATION_DELIMITER = '---EXPLANATION---';
 const CHANGES_DELIMITER = '---CHANGES---';
@@ -44,35 +46,108 @@ export function getOrCreateSessionId(): string {
   }
 }
 
+export type LocalHistoryRow = {
+  id: string;
+  session_id: string;
+  prompt_original: string;
+  prompt_optimized: string;
+  mode: string;
+  explanation: string;
+  created_at: string;
+};
+
+function readLocalHistoryRows(): LocalHistoryRow[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as LocalHistoryRow[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistoryRows(rows: LocalHistoryRow[]) {
+  localStorage.setItem(
+    LOCAL_HISTORY_KEY,
+    JSON.stringify(rows.slice(0, LOCAL_HISTORY_CAP)),
+  );
+}
+
+function saveToLocalHistory(
+  params: {
+    prompt_original: string;
+    prompt_optimized: string;
+    mode: string;
+    explanation: string;
+  },
+  session_id: string,
+): string {
+  const id =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? `local-${crypto.randomUUID()}`
+      : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const item: LocalHistoryRow = {
+    id,
+    session_id,
+    prompt_original: params.prompt_original,
+    prompt_optimized: params.prompt_optimized,
+    mode: params.mode,
+    explanation: params.explanation,
+    created_at: new Date().toISOString(),
+  };
+  const list = readLocalHistoryRows();
+  list.unshift(item);
+  writeLocalHistoryRows(list);
+  return id;
+}
+
+/** Client-side fallback when Supabase insert fails or is unavailable. */
+export function getLocalHistoryForSession(sessionId: string): LocalHistoryRow[] {
+  return readLocalHistoryRows().filter((r) => r.session_id === sessionId);
+}
+
 export async function saveToHistory(params: {
   prompt_original: string;
   prompt_optimized: string;
   mode: string;
   explanation: string;
 }): Promise<string | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
-
   const session_id = getOrCreateSessionId();
   if (!session_id) return null;
 
-  try {
-    const { data, error } = await client
-      .from('pp_optimization_history')
-      .insert({
-        session_id,
-        prompt_original: params.prompt_original,
-        prompt_optimized: params.prompt_optimized,
-        mode: params.mode,
-        explanation: params.explanation,
-      })
-      .select('id')
-      .single();
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from('pp_optimization_history')
+        .insert({
+          session_id,
+          prompt_original: params.prompt_original,
+          prompt_optimized: params.prompt_optimized,
+          mode: params.mode,
+          explanation: params.explanation,
+        })
+        .select('id')
+        .single();
 
-    if (error || !data) return null;
-    return data.id;
-  } catch {
-    // non-blocking
-    return null;
+      if (!error && data?.id) {
+        return data.id;
+      }
+      if (error && typeof window !== 'undefined') {
+        console.warn(
+          '[PromptPerfect] History save to Supabase failed:',
+          error.message,
+        );
+      }
+    } catch (e) {
+      if (typeof window !== 'undefined') {
+        console.warn('[PromptPerfect] History save error:', e);
+      }
+    }
   }
+
+  if (typeof window === 'undefined') return null;
+  return saveToLocalHistory(params, session_id);
 }

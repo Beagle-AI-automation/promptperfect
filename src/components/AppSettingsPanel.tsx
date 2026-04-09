@@ -48,11 +48,13 @@ export function AppSettingsPanel({
   const [localKey, setLocalKey] = useState(() => apiKey || loadStoredKey(provider));
   const [saving, setSaving] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     setLocalProvider(provider);
     setLocalKey(apiKey || loadStoredKey(provider));
     setVerified(false);
+    setSaveError('');
   }, [open, provider, apiKey]);
 
   const handleVerifyKey = () => {
@@ -63,8 +65,9 @@ export function AppSettingsPanel({
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError('');
     try {
-      await fetch('/api/auth/update-user', {
+      const res = await fetch('/api/auth/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,6 +82,15 @@ export function AppSettingsPanel({
           api_key: localProvider !== 'gemini' ? localKey : '',
         }),
       });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(
+          typeof payload.error === 'string' && payload.error.trim()
+            ? payload.error
+            : 'Could not save settings',
+        );
+        return;
+      }
       onProviderChange(localProvider);
       onApiKeyChange(localProvider !== 'gemini' ? localKey : '');
       if (localProvider !== 'gemini') {
@@ -194,6 +206,11 @@ export function AppSettingsPanel({
                 <p className="mt-1 text-xs text-green-500">Key format looks valid.</p>
               )}
             </div>
+          )}
+          {saveError && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {saveError}
+            </p>
           )}
           <button
             type="button"
