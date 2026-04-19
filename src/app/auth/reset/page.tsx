@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { validatePassword } from '@/lib/auth/validation'
@@ -25,6 +25,11 @@ export default function AuthResetPage() {
     if (!url || !key) return null
     return createBrowserClient(url, key)
   }, [])
+
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.auth.getSession()
+  }, [supabase])
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()

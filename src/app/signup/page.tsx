@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { validatePassword } from '@/lib/auth/validation';
+import { signInWithGoogle } from '@/lib/auth/signInWithGoogle';
+import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { GoogleIcon } from '@/components/auth/GoogleIcon';
@@ -14,7 +16,6 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
-import { getOAuthCallbackUrl } from '@/lib/auth/oauthRedirect';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   const passwordValidation = validatePassword(password);
   const showPasswordHints = password.length > 0;
@@ -39,10 +41,7 @@ export default function SignUpPage() {
       return;
     }
     setError('');
-    const { error: oAuthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: getOAuthCallbackUrl() },
-    });
+    const { error: oAuthError } = await signInWithGoogle(supabase);
     if (oAuthError) setError(oAuthError.message);
   }
 
@@ -64,35 +63,98 @@ export default function SignUpPage() {
           password,
         }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as {
+        error?: string;
+        hint?: string;
+        verificationRequired?: boolean;
+        email?: string;
+        user?: {
+          id: string;
+          name: string | null;
+          email: string;
+          provider?: string;
+          model?: string;
+        };
+        session?: {
+          access_token: string;
+          refresh_token: string;
+        };
+      };
       if (!res.ok) {
-        setError(data.error || 'Sign up failed');
+        setError(
+          [data.error, data.hint].filter(Boolean).join(' — ') ||
+            'Sign up failed',
+        );
         return;
       }
-      const user = data.user as {
-        id: string;
-        name: string | null;
-        email: string;
-        provider?: string;
-        model?: string;
-      };
-      localStorage.setItem(
-        'pp_user',
-        JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          provider: user.provider ?? 'gemini',
-          model: user.model ?? 'gemini-2.0-flash',
-        })
-      );
-      router.push('/control-room');
+      if (data.verificationRequired) {
+        setVerificationSent(true);
+        return;
+      }
+      if (
+        data.session &&
+        data.user &&
+        supabase &&
+        typeof data.session.access_token === 'string' &&
+        typeof data.session.refresh_token === 'string'
+      ) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        localStorage.setItem(
+          'pp_user',
+          JSON.stringify({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            provider: data.user.provider ?? 'gemini',
+            model: data.user.model ?? 'gemini-2.0-flash',
+          }),
+        );
+        await claimGuestHistoryAfterAuth(data.user.id);
+        router.push('/control-room');
+        return;
+      }
+      setError('Unexpected signup response');
     } catch {
       setError('Something went wrong');
     } finally {
       setLoading(false);
     }
   };
+
+  if (verificationSent) {
+    return (
+      <AuthShell>
+        <div
+          className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          aria-hidden
+        >
+          ✓
+        </div>
+        <h1 className="text-center font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
+          Check your email
+        </h1>
+        <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
+          We sent a verification link to{' '}
+          <span className="font-medium text-[#E7E6D9]">{email.trim()}</span>.
+          After you confirm, you can{' '}
+          <Link href="/login" className="text-[#4552FF] hover:underline">
+            sign in
+          </Link>{' '}
+          with your password.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/login')}
+          className={`${authPrimaryBtnClass} mt-8 w-full`}
+        >
+          Go to sign in
+        </button>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

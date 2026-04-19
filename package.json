@@ -13,7 +13,9 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
-    "db:migrate": "node supabase/migrate.js"
+    "test:coverage": "vitest run --coverage",
+    "db:migrate": "node supabase/migrate.js",
+    "postinstall": "node scripts/fix-supabase-js-types.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.54",
@@ -41,6 +43,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",
+    "@vitest/coverage-v8": "^4.1.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^28.0.0",

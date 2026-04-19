@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory'
 
 export default function AuthCallbackPage() {
   const router = useRouter()
@@ -18,7 +19,7 @@ export default function AuthCallbackPage() {
       router.push('/login')
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data.session?.user) {
         const u = data.session.user
         localStorage.setItem(
@@ -34,6 +35,9 @@ export default function AuthCallbackPage() {
             model: 'gemini-2.0-flash',
           })
         )
+        // PP-504: guest → user — reparent `pp_optimization_history` from `pp_guest_id`,
+        // set `user_id`, clear guest_usage + `pp_guest_id` / `pp_guest_count`.
+        await claimGuestHistoryAfterAuth(u.id)
         router.push('/app')
       } else {
         router.push('/login')

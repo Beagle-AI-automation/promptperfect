@@ -1,7 +1,9 @@
 'use client';
 
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
 
 interface Stats {
   total: number;
@@ -14,6 +16,10 @@ interface Stats {
 
 interface StatsBarProps {
   refreshTrigger?: number;
+  /** Shown until the next successful stats fetch (instant +1 on feedback). */
+  optimisticThumbs?: { up: number; down: number };
+  /** Reset parent optimistic state after server stats have loaded. */
+  onStatsFetched?: () => void;
 }
 
 function StatLabel({ children }: { children: React.ReactNode }) {
@@ -32,9 +38,15 @@ function StatValue({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function StatsBar({ refreshTrigger = 0 }: StatsBarProps) {
+export function StatsBar({
+  refreshTrigger = 0,
+  optimisticThumbs = { up: 0, down: 0 },
+  onStatsFetched,
+}: StatsBarProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const onStatsFetchedRef = useRef(onStatsFetched);
+  onStatsFetchedRef.current = onStatsFetched;
 
   useEffect(() => {
     const emptyStats: Stats = {
@@ -45,22 +57,44 @@ export function StatsBar({ refreshTrigger = 0 }: StatsBarProps) {
       byMode: {},
       byProvider: {},
     };
-    fetch('/api/stats')
-      .then(async (r) => {
+
+    let cancelled = false;
+
+    void (async () => {
+      const supabase = createSupabaseBrowserClient();
+      const headers = supabase
+        ? await getPromptPerfectAuthHeaders(supabase)
+        : null;
+
+      try {
+        const r = await fetch('/api/stats', {
+          headers: headers ?? {},
+        });
         const data = (await r.json()) as Stats & { error?: string };
-        if (!r.ok || data.error) return emptyStats;
-        return {
+        if (cancelled) return;
+        if (!r.ok || data.error) {
+          setStats(emptyStats);
+          return;
+        }
+        setStats({
           total: data.total ?? 0,
           thumbsUp: data.thumbsUp ?? 0,
           thumbsDown: data.thumbsDown ?? 0,
           avgScore: data.avgScore ?? null,
           byMode: data.byMode ?? {},
           byProvider: data.byProvider ?? {},
-        };
-      })
-      .then(setStats)
-      .catch(() => setStats(emptyStats))
-      .finally(() => setLoading(false));
+        });
+        if (!cancelled) onStatsFetchedRef.current?.();
+      } catch {
+        if (!cancelled) setStats(emptyStats);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [refreshTrigger]);
 
   const shellClass =
@@ -76,8 +110,10 @@ export function StatsBar({ refreshTrigger = 0 }: StatsBarProps) {
 
   if (!stats) return null;
 
-  const thumbsUp = stats.thumbsUp ?? 0;
-  const thumbsDown = stats.thumbsDown ?? 0;
+  const thumbsUp =
+    (stats.thumbsUp ?? 0) + (optimisticThumbs.up ?? 0);
+  const thumbsDown =
+    (stats.thumbsDown ?? 0) + (optimisticThumbs.down ?? 0);
   const satisfaction =
     thumbsUp + thumbsDown > 0
       ? Math.round((thumbsUp / (thumbsUp + thumbsDown)) * 100)

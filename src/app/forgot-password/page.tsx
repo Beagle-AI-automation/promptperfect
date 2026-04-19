@@ -9,6 +9,7 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles'
+import { getPasswordResetRedirectUrl } from '@/lib/auth/oauthRedirect'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -32,7 +33,7 @@ export default function ForgotPasswordPage() {
     }
     setLoading(true)
     const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset`,
+      redirectTo: getPasswordResetRedirectUrl(),
     })
     setLoading(false)
     if (err) {

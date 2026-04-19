@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
         body.version === 'v1' || body.version === 'v2' ? body.version : 'v1';
 
       if (sessionId) {
-        const supabase = getSupabaseAdminClient();
-        if (supabase) {
-          void supabase.from('optimization_logs').insert({
+        const admin = getSupabaseAdminClient();
+        const db = admin;
+        if (db) {
+          void db.from('optimization_logs').insert({
             session_id: sessionId,
             mode: normalizeModeForDb(mode),
             version,

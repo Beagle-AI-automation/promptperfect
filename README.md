@@ -32,6 +32,41 @@ PromptPerfect takes your draft prompts—whether vague, messy, or just a rough i
 | **Database** | Supabase (for analytics) |
 | **Deployment** | Vercel |
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Client Layer                       │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────┐  │
+│  │ Landing   │  │ App (Optimizer)│ │ Chrome Ext    │  │
+│  │ Page      │  │ + Library     │  │ (any page)    │  │
+│  └──────────┘  └──────┬───────┘  └───────┬───────┘  │
+└────────────────────────┼─────────────────┼───────────┘
+                         │                 │
+┌────────────────────────┼─────────────────┼───────────┐
+│                    API Layer              │           │
+│  ┌──────────────┐  ┌──────────────┐  ┌───┴────────┐ │
+│  │ /api/optimize │  │ /api/auth/*  │  │/api/optimize│ │
+│  │ (streaming)   │  │ (login/signup│  │-sync (JSON) │ │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬─────┘ │
+└─────────┼────────────────┼───────────────────┼───────┘
+          │                │                   │
+┌─────────┼────────────────┼───────────────────┼───────┐
+│         │           Service Layer             │       │
+│  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴─────┐ │
+│  │ lib/prompts   │  │ Supabase Auth │  │lib/providers││
+│  │ (3 modes)     │  │              │  │(Gemini/OAI/ ││
+│  └──────────────┘  └──────────────┘  │ Anthropic)  ││
+│                                      └─────────────┘ │
+│  ┌──────────────────────────────────────────────────┐│
+│  │              Supabase (PostgreSQL)                ││
+│  │  optimization_logs │ pp_optimization_history      ││
+│  │  pp_user_profiles  │ pp_saved_prompts             ││
+│  │  guest_usage       │ pp_users                     ││
+│  └──────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────┘
+```
+
 ## Getting Started
 
 Follow these steps to run PromptPerfect locally on your machine.
@@ -98,13 +133,7 @@ You can deploy your own instance of PromptPerfect to Vercel with a single click:
 
 ## Contributing
 
-We welcome contributions! Whether it's fixing bugs, improving documentation, or suggesting new features, your help is appreciated.
-
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/amazing-feature`).
-3.  Commit your changes (`git commit -m 'Add some amazing feature'`).
-4.  Push to the branch (`git push origin feature/amazing-feature`).
-5.  Open a Pull Request.
+We welcome contributions—bug fixes, docs, and features are all appreciated. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for local setup, branch naming (`PP-XXX/description`), commit format, PR expectations (`npx vitest run`, `npx tsc --noEmit`), and code style.
 
 ## FAQ
 
@@ -122,7 +151,7 @@ Yes. Your API key is sent from your browser directly to the LLM provider's API. 
 
 ### How do I add a new optimization mode?
 
-Add a new prompt string to `lib/prompts.ts` and a corresponding option in the ModeSelector component. See CONTRIBUTING.md for the step-by-step guide.
+Add a new prompt string to [`src/lib/prompts.ts`](src/lib/prompts.ts) and a corresponding option in the [`ModeSelector`](src/components/ModeSelector.tsx) component. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ### How is this different from DSPy or PromptFoo?
 
