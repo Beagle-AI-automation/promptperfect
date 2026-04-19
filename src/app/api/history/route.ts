@@ -13,6 +13,18 @@ const ROW_SELECT_FULL =
 const ROW_SELECT_LEGACY =
   'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at';
 
+/** Legacy DB rows may omit `optimize_session_id`; API always exposes it as optional. */
+type HistoryListRow = {
+  id: string;
+  session_id: string;
+  optimize_session_id?: string | null;
+  prompt_original: string;
+  prompt_optimized: string;
+  mode: string;
+  explanation: string;
+  created_at: string;
+};
+
 export async function GET(request: Request) {
   if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
     return NextResponse.json(
@@ -40,23 +52,28 @@ export async function GET(request: Request) {
     );
   }
 
-  let { data, error } = await db
+  const first = await db
     .from('pp_optimization_history')
     .select(ROW_SELECT_FULL)
     .eq('user_id', identity.userId)
     .order('created_at', { ascending: false })
     .limit(50);
 
+  let data = first.data as HistoryListRow[] | null;
+  let error = first.error;
+
   if (
     error &&
     /optimize_session_id|schema cache|could not find/i.test(error.message)
   ) {
-    ({ data, error } = await db
+    const second = await db
       .from('pp_optimization_history')
       .select(ROW_SELECT_LEGACY)
       .eq('user_id', identity.userId)
       .order('created_at', { ascending: false })
-      .limit(50));
+      .limit(50);
+    data = second.data as HistoryListRow[] | null;
+    error = second.error;
   }
 
   if (error) {

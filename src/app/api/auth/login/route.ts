@@ -3,6 +3,25 @@ import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/client/supabase'
 
+/** Narrow Supabase rows — generated DB types may resolve to `GenericStringError` when tables are absent from typings. */
+type PpUserRowApiKey = {
+  id: string
+  name: string | null
+  email: string | null
+  provider: string | null
+  model: string | null
+  api_key: string | null
+}
+
+type PpUserRowPassword = {
+  id: string
+  name: string | null
+  email: string | null
+  password_hash: string | null
+  provider: string | null
+  model: string | null
+}
+
 function looksLikeEmailNotConfirmedError(message: string | undefined): boolean {
   if (!message) return false
   return /email not confirmed|address not confirmed|confirm your email|not verified|verification required|email address is not confirmed/i.test(
@@ -43,12 +62,13 @@ async function jsonLoginSuccess(
     .maybeSingle()
 
   if (!row) {
-    const { data: byEmail } = await findPpUserByEmail(
+    const { data: rawByEmail } = await findPpUserByEmail(
       admin,
       email,
       emailRawTrim,
       'id, name, email, provider, model, api_key',
     )
+    const byEmail = rawByEmail as PpUserRowApiKey | null
 
     if (byEmail) {
       if (byEmail.id !== authId) {
@@ -221,12 +241,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: user, error } = await findPpUserByEmail(
+    const { data: rawUser, error } = await findPpUserByEmail(
       admin,
       email,
       emailRawTrim,
       'id, name, email, password_hash, provider, model',
     )
+    const user = rawUser as PpUserRowPassword | null
 
     if (error || !user) {
       return NextResponse.json(

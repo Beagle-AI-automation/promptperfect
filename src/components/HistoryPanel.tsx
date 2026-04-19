@@ -93,7 +93,7 @@ export function HistoryPanel({
         const selLegacy =
           'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at';
 
-        let q = await client
+        const qFull = await client
           .from('pp_optimization_history')
           .select(selFull)
           .eq('user_id', uid)
@@ -101,19 +101,24 @@ export function HistoryPanel({
           .limit(20);
 
         if (
-          q.error &&
-          /optimize_session_id|schema cache|could not find/i.test(q.error.message)
+          qFull.error &&
+          /optimize_session_id|schema cache|could not find/i.test(
+            qFull.error.message,
+          )
         ) {
-          q = await client
+          const qLeg = await client
             .from('pp_optimization_history')
             .select(selLegacy)
             .eq('user_id', uid)
             .order('created_at', { ascending: false })
             .limit(20);
+          if (qLeg.error) throw qLeg.error;
+          setRows((qLeg.data as OptimizationHistoryItem[]) ?? []);
+          return;
         }
 
-        if (q.error) throw q.error;
-        setRows((q.data as OptimizationHistoryItem[]) ?? []);
+        if (qFull.error) throw qFull.error;
+        setRows((qFull.data as OptimizationHistoryItem[]) ?? []);
         return;
       }
 
@@ -123,7 +128,7 @@ export function HistoryPanel({
         return;
       }
 
-      let q = await client
+      const qGuestFull = await client
         .from('pp_optimization_history')
         .select(
           'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
@@ -133,10 +138,12 @@ export function HistoryPanel({
         .limit(20);
 
       if (
-        q.error &&
-        /optimize_session_id|schema cache|could not find/i.test(q.error.message)
+        qGuestFull.error &&
+        /optimize_session_id|schema cache|could not find/i.test(
+          qGuestFull.error.message,
+        )
       ) {
-        q = await client
+        const qGuestLeg = await client
           .from('pp_optimization_history')
           .select(
             'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
@@ -144,10 +151,12 @@ export function HistoryPanel({
           .eq('session_id', sid)
           .order('created_at', { ascending: false })
           .limit(20);
+        if (qGuestLeg.error) throw qGuestLeg.error;
+        setRows((qGuestLeg.data as OptimizationHistoryItem[]) ?? []);
+      } else {
+        if (qGuestFull.error) throw qGuestFull.error;
+        setRows((qGuestFull.data as OptimizationHistoryItem[]) ?? []);
       }
-
-      if (q.error) throw q.error;
-      setRows((q.data as OptimizationHistoryItem[]) ?? []);
     } catch {
       setRows([]);
     } finally {
