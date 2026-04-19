@@ -184,7 +184,8 @@ export async function POST(request: Request) {
       isMissingSourceHistoryColumn(error.message) &&
       'source_history_id' in payload
     ) {
-      const { source_history_id: _s, ...rest } = payload;
+      const rest = { ...payload };
+      delete rest.source_history_id;
       payload = rest;
       continue;
     }

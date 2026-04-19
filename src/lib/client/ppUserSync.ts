@@ -25,7 +25,7 @@ async function resolveAuthInternal(
   supabase: SupabaseClient,
 ): Promise<{ user: User | null; session: Session | null }> {
   const attempt = async (): Promise<{ user: User | null; session: Session | null }> => {
-    let {
+    const {
       data: { user },
       error,
     } = await supabase.auth.getUser();

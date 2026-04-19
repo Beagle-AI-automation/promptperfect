@@ -81,14 +81,16 @@ async function insertHistoryRow(
 
   if (result.error && isMissingColumnError(result.error) && 'optimize_session_id' in payload) {
     logHistoryDev('retry without optimize_session_id', result.error);
-    const { optimize_session_id: _o, ...rest } = payload;
+    const rest = { ...payload };
+    delete rest.optimize_session_id;
     payload = rest;
     result = await runInsert(payload);
   }
 
   if (result.error && isMissingColumnError(result.error) && 'provider' in payload) {
     logHistoryDev('retry without provider', result.error);
-    const { provider: _p, ...rest } = payload;
+    const rest = { ...payload };
+    delete rest.provider;
     payload = rest;
     result = await runInsert(payload);
   }

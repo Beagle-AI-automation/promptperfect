@@ -40,12 +40,12 @@ export function FeedbackButtons({
     });
 
     if (!sessionId?.trim()) {
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
       return;
     }
 
     let cancelled = false;
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     void (async () => {
       const client = createSupabaseBrowserClient();
       const authHeaders = client ? await getPromptPerfectAuthHeaders(client) : null;
