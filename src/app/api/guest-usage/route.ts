@@ -1,144 +1,85 @@
-import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
-import { GUEST_LIMIT } from '@/lib/guest';
+import { NextResponse } from 'next/server'
+import { GUEST_LIMIT } from '@/lib/guest'
+import { getSupabaseClient } from '@/lib/supabase'
 
 export async function POST(request: Request) {
-  try {
-    const body = (await request.json().catch(() => null)) as Record<
-      string,
-      unknown
-    > | null;
-    const guestId =
-      typeof body?.guestId === 'string' ? body.guestId.trim() : '';
-    const mode = typeof body?.mode === 'string' ? body.mode : null;
-    const provider =
-      typeof body?.provider === 'string' ? body.provider : null;
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return NextResponse.json(
+      { error: 'Database not configured' },
+      { status: 503 }
+    )
+  }
 
-    if (!guestId) {
-      return NextResponse.json(
-        { error: 'Guest ID required' },
-        { status: 400 },
-      );
-    }
+  const { guestId, mode, provider } = await request.json() as {
+    guestId?: string
+    mode?: string
+    provider?: string
+  }
 
-    const supabase = getSupabaseAdminClient();
-    if (!supabase) {
-      return NextResponse.json({
-        persisted: false,
-        limit: GUEST_LIMIT,
-      });
-    }
+  if (!guestId) {
+    return NextResponse.json({ error: 'Guest ID required' }, { status: 400 })
+  }
 
-    const { data: existing, error: selectErr } = await supabase
-      .from('guest_usage')
-      .select('optimization_count')
-      .eq('guest_id', guestId)
-      .maybeSingle();
+  const { data: existing } = await supabase
+    .from('guest_usage')
+    .select('optimization_count')
+    .eq('guest_id', guestId)
+    .single()
 
-    if (selectErr) {
-      console.warn(
-        '[guest-usage] select failed — using local guest count only. Run migration 20250404000000_guest_usage.sql if you need server-side limits.',
-        selectErr.message,
-      );
-      return NextResponse.json({
-        persisted: false,
-        limit: GUEST_LIMIT,
-      });
-    }
+  const currentCount = existing?.optimization_count ?? 0
 
-    const currentCount = existing?.optimization_count ?? 0;
+  if (currentCount >= GUEST_LIMIT) {
+    return NextResponse.json(
+      { error: 'Guest limit reached. Sign up for unlimited access.', limitReached: true },
+      { status: 429 }
+    )
+  }
 
-    if (currentCount >= GUEST_LIMIT) {
-      return NextResponse.json(
-        {
-          error: 'Guest limit reached. Sign up for unlimited access.',
-          limitReached: true,
-          count: currentCount,
-          limit: GUEST_LIMIT,
-        },
-        { status: 429 },
-      );
-    }
-
-    const newCount = currentCount + 1;
-    const { error: upsertErr } = await supabase.from('guest_usage').upsert(
+  await supabase
+    .from('guest_usage')
+    .upsert(
       {
         guest_id: guestId,
-        optimization_count: newCount,
+        optimization_count: currentCount + 1,
         last_used_at: new Date().toISOString(),
-        last_mode: mode,
-        last_provider: provider,
+        last_mode: mode ?? null,
+        last_provider: provider ?? null,
       },
-      { onConflict: 'guest_id' },
-    );
+      { onConflict: 'guest_id' }
+    )
 
-    if (upsertErr) {
-      console.warn(
-        '[guest-usage] upsert failed — using local guest count only.',
-        upsertErr.message,
-      );
-      return NextResponse.json({
-        persisted: false,
-        limit: GUEST_LIMIT,
-      });
-    }
-
-    return NextResponse.json({
-      count: newCount,
-      limit: GUEST_LIMIT,
-      remaining: Math.max(0, GUEST_LIMIT - newCount),
-      persisted: true,
-    });
-  } catch (e) {
-    console.error('[guest-usage] POST', e);
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  }
+  return NextResponse.json({
+    count: currentCount + 1,
+    limit: GUEST_LIMIT,
+    remaining: GUEST_LIMIT - 1 - currentCount,
+  })
 }
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const guestId = searchParams.get('guestId')?.trim();
+  const supabase = getSupabaseClient()
+  const { searchParams } = new URL(request.url)
+  const guestId = searchParams.get('guestId')
 
-    if (!guestId) {
-      return NextResponse.json({
-        count: 0,
-        limit: GUEST_LIMIT,
-        remaining: GUEST_LIMIT,
-        serverTracking: true,
-      });
-    }
-
-    const supabase = getSupabaseAdminClient();
-    if (!supabase) {
-      return NextResponse.json({ serverTracking: false });
-    }
-
-    const { data, error } = await supabase
-      .from('guest_usage')
-      .select('optimization_count')
-      .eq('guest_id', guestId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[guest-usage] GET failed — client will use local count only.', error.message);
-      return NextResponse.json({ serverTracking: false });
-    }
-
-    const count = data?.optimization_count ?? 0;
-
-    return NextResponse.json({
-      count,
-      limit: GUEST_LIMIT,
-      remaining: Math.max(0, GUEST_LIMIT - count),
-      serverTracking: true,
-    });
-  } catch (e) {
-    console.error('[guest-usage] GET', e);
-    return NextResponse.json({
-      count: 0,
-      limit: GUEST_LIMIT,
-      remaining: GUEST_LIMIT,
-    });
+  if (!guestId) {
+    return NextResponse.json({ count: 0, limit: GUEST_LIMIT, remaining: GUEST_LIMIT })
   }
+
+  if (!supabase) {
+    return NextResponse.json({ count: 0, limit: GUEST_LIMIT, remaining: GUEST_LIMIT })
+  }
+
+  const { data } = await supabase
+    .from('guest_usage')
+    .select('optimization_count')
+    .eq('guest_id', guestId)
+    .single()
+
+  const count = data?.optimization_count ?? 0
+
+  return NextResponse.json({
+    count,
+    limit: GUEST_LIMIT,
+    remaining: Math.max(0, GUEST_LIMIT - count),
+  })
 }

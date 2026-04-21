@@ -1,72 +1,69 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { POST, OPTIONS } from "./route";
 
-vi.mock('ai', () => ({
-  generateText: vi.fn(async () => ({
-    text: 'Optimized---EXPLANATION---Because---CHANGES---Tweaks',
-  })),
+const generateText = vi.fn();
+
+vi.mock("@/lib/client/supabase", () => ({
+  getSupabaseAdminClient: () => null,
 }));
 
-vi.mock('@/lib/client/supabase', () => ({
-  getSupabaseAdminClient: vi.fn(() => null),
-}));
-
-vi.mock('@/lib/providers', () => ({
-  createProvider: vi.fn(() => ({
+vi.mock("@/lib/providers", () => ({
+  createProvider: () => ({
     model: {},
-    modelId: 'gemini-2.0-flash',
-  })),
+    modelId: "test-model",
+  }),
 }));
 
-import { OPTIONS, POST } from './route';
+vi.mock("ai", () => ({
+  generateText: (...args: unknown[]) => generateText(...args),
+}));
 
-describe('/api/optimize-sync OPTIONS', () => {
-  it('returns 204 with CORS headers', async () => {
+describe("/api/optimize-sync", () => {
+  beforeEach(() => {
+    generateText.mockReset();
+    generateText.mockResolvedValue({
+      text: "Optimized output\n---EXPLANATION---\nBecause",
+    });
+  });
+
+  it("OPTIONS returns CORS headers", async () => {
     const res = await OPTIONS();
     expect(res.status).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
-    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
-    expect(res.headers.get('Access-Control-Allow-Headers')).toContain(
-      'Content-Type',
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain(
+      "Content-Type"
     );
   });
-});
 
-describe('/api/optimize-sync POST', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  function jsonPost(body: unknown) {
-    return new NextRequest('http://localhost/api/optimize-sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+  it("POST returns 400 when prompt and text are missing", async () => {
+    const req = new Request("http://localhost/api/optimize-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "better", provider: "gemini" }),
     });
-  }
-
-  it('returns 400 when prompt and text are missing', async () => {
-    const res = await POST(jsonPost({}));
+    const res = await POST(req as Parameters<typeof POST>[0]);
     expect(res.status).toBe(400);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
-    const data = await res.json();
-    expect(data.error).toMatch(/prompt or text is required/i);
+    const json = (await res.json()) as { error?: string };
+    expect(json.error).toMatch(/prompt or text is required/i);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 
-  it('returns 200 and JSON for a valid request', async () => {
-    const res = await POST(
-      jsonPost({
-        text: 'Hello world',
-        mode: 'better',
-        provider: 'gemini',
-        apiKey: 'test-api-key',
+  it("POST returns optimized payload for valid body", async () => {
+    const req = new Request("http://localhost/api/optimize-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello world",
+        mode: "better",
+        provider: "gemini",
       }),
-    );
+    });
+    const res = await POST(req as Parameters<typeof POST>[0]);
     expect(res.status).toBe(200);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
-    const data = await res.json();
-    expect(data.optimizedText).toBeDefined();
-    expect(data.provider).toBe('gemini');
-    expect(data.model).toBe('gemini-2.0-flash');
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    const json = (await res.json()) as { optimizedText?: string };
+    expect(json.optimizedText).toContain("Optimized");
+    expect(generateText).toHaveBeenCalled();
   });
 });

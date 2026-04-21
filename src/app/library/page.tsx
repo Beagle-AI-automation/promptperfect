@@ -1,15 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Bookmark, Search, Trash2 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
-import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
-import { syncPpUserFromAuthSession } from '@/lib/client/ppUserSync';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Bookmark, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { getSupabaseClient } from '@/lib/supabase';
 
-interface SavedPrompt {
+const PP_USER_KEY = 'pp_user';
+const REOPTIMIZE_SESSION_KEY = 'pp_reoptimize';
+const PREVIEW_LEN = 120;
+
+interface PPUser {
   id: string;
+  name: string | null;
+  email: string;
+  provider: string;
+  model: string;
+}
+
+interface SavedPromptRow {
+  id: string;
+  user_id: string;
   title: string;
   original_prompt: string;
   optimized_prompt: string;
@@ -19,74 +30,153 @@ interface SavedPrompt {
   created_at: string;
 }
 
-function hasPpUser(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    const raw = localStorage.getItem('pp_user');
-    if (!raw) return false;
-    const u = JSON.parse(raw) as { id?: string };
-    return typeof u.id === 'string' && u.id.length > 0;
-  } catch {
-    return false;
-  }
+function previewText(text: string): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= PREVIEW_LEN) return t || '—';
+  return `${t.slice(0, PREVIEW_LEN)}…`;
+}
+
+function rowMatchesSearch(row: SavedPromptRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const title = (row.title ?? '').toLowerCase();
+  const orig = (row.original_prompt ?? '').toLowerCase();
+  const opt = (row.optimized_prompt ?? '').toLowerCase();
+  return title.includes(q) || orig.includes(q) || opt.includes(q);
+}
+
+type LibraryModeFilter = 'all' | 'better' | 'specific' | 'cot';
+
+function rowMatchesModeFilter(row: SavedPromptRow, filter: LibraryModeFilter): boolean {
+  if (filter === 'all') return true;
+  const m = (row.mode ?? '').trim().toLowerCase();
+  if (filter === 'better') return m === 'better';
+  if (filter === 'specific') return m === 'specific';
+  if (filter === 'cot') return m === 'cot' || m === 'chain-of-thought' || m === 'chain_of_thought';
+  return true;
+}
+
+function modeBadgeLabel(mode: string): string {
+  const m = mode.trim().toLowerCase();
+  if (m === 'cot' || m === 'chain-of-thought' || m === 'chain_of_thought') return 'CoT';
+  return mode;
+}
+
+function LibraryEmptyState({
+  message,
+  children,
+}: {
+  message: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-[12px] border border-dashed border-[#2a2a2a] bg-[#090909] px-6 py-14 text-center"
+    >
+      <p className="text-[15px] font-medium leading-relaxed text-[#ccc]">{message}</p>
+      {children ? <div className="mt-6 flex flex-col items-center gap-3">{children}</div> : null}
+    </div>
+  );
 }
 
 export default function LibraryPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [mounted, setMounted] = useState(false);
-  const [prompts, setPrompts] = useState<SavedPrompt[]>([]);
+  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState<PPUser | null>(null);
+  const [rows, setRows] = useState<SavedPromptRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [modeFilter, setModeFilter] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [modeFilter, setModeFilter] = useState<LibraryModeFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadHint, setLoadHint] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoadError(null);
-    setLoadHint(null);
-    if (!supabase || !hasPpUser()) {
-      setPrompts([]);
-      setLoading(false);
-      return;
-    }
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          rowMatchesSearch(row, searchQuery) && rowMatchesModeFilter(row, modeFilter),
+      ),
+    [rows, searchQuery, modeFilter],
+  );
 
-    await syncPpUserFromAuthSession(supabase);
-
-    const headers = await getPromptPerfectAuthHeaders(supabase);
-    if (!headers) {
-      setLoadError('Sign in again to load your library.');
-      setPrompts([]);
+  const loadSaved = useCallback(async (userId: string) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      setError('Library is unavailable.');
+      setRows([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch('/api/saved-prompts', { headers });
-      const data = (await res.json().catch(() => ({}))) as {
-        prompts?: SavedPrompt[];
-        error?: string;
-        hint?: string;
-        code?: string;
-      };
-      if (!res.ok) {
-        setLoadError(data.error || 'Could not load library');
-        setLoadHint(data.hint ?? null);
-        setPrompts([]);
-        return;
-      }
-      setPrompts(Array.isArray(data.prompts) ? data.prompts : []);
+      const { data, error: qErr } = await client
+        .from('pp_saved_prompts')
+        .select(
+          'id,user_id,title,original_prompt,optimized_prompt,explanation,mode,provider,created_at',
+        )
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (qErr) throw qErr;
+      setRows((data as SavedPromptRow[]) ?? []);
     } catch {
-      setLoadError('Network error');
-      setPrompts([]);
+      setError('Could not load saved prompts.');
+      setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      setError(null);
+      setRows((r) => r.filter((row) => row.id !== id));
+      setExpandedId((prev) => (prev === id ? null : prev));
+
+      const client = getSupabaseClient();
+      if (!client) {
+        setError('Library is unavailable.');
+        void loadSaved(user.id);
+        return;
+      }
+
+      const { error: delErr } = await client
+        .from('pp_saved_prompts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (delErr) {
+        setError('Could not delete prompt.');
+        void loadSaved(user.id);
+      }
+    },
+    [user, loadSaved],
+  );
+
+  const handleReoptimize = useCallback(
+    (row: SavedPromptRow) => {
+      try {
+        sessionStorage.setItem(
+          REOPTIMIZE_SESSION_KEY,
+          JSON.stringify({
+            original_prompt: row.original_prompt,
+            mode: row.mode,
+          }),
+        );
+      } catch {
+        // ignore quota / private mode
+      }
+      router.push('/app');
+    },
+    [router],
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -94,308 +184,225 @@ export default function LibraryPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    void load();
-  }, [mounted, load]);
-
-  const handleDelete = async (id: string) => {
-    if (!supabase || !hasPpUser()) return;
-    setDeletingId(id);
-    setDeleteError(null);
     try {
-      const headers = await getPromptPerfectAuthHeaders(supabase);
-      if (!headers) {
-        setDeleteError('Sign in again to delete.');
+      const raw = localStorage.getItem(PP_USER_KEY);
+      if (!raw) {
+        setUser(null);
+        setLoading(false);
+        setAuthReady(true);
         return;
       }
-      const res = await fetch(`/api/saved-prompts?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers,
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.ok) {
-        setPrompts((prev) => prev.filter((p) => p.id !== id));
-        setExpandedId((e) => (e === id ? null : e));
-      } else {
-        setDeleteError(body.error || 'Could not delete prompt');
+      const u = JSON.parse(raw) as PPUser;
+      if (!u?.id) {
+        setUser(null);
+        setLoading(false);
+        setAuthReady(true);
+        return;
       }
-    } finally {
-      setDeletingId(null);
+      setUser(u);
+      void loadSaved(u.id);
+      setAuthReady(true);
+    } catch {
+      setUser(null);
+      setLoading(false);
+      setAuthReady(true);
     }
-  };
+  }, [mounted, loadSaved]);
 
-  const handleReoptimize = (prompt: SavedPrompt) => {
-    sessionStorage.setItem(
-      'pp_reoptimize',
-      JSON.stringify({
-        text: prompt.original_prompt,
-        mode: prompt.mode,
-      }),
-    );
-    router.push('/app');
-  };
-
-  const q = search.trim().toLowerCase();
-  const filtered = prompts.filter((p) => {
-    const matchesSearch =
-      !q ||
-      p.title.toLowerCase().includes(q) ||
-      p.original_prompt.toLowerCase().includes(q) ||
-      p.optimized_prompt.toLowerCase().includes(q) ||
-      p.explanation.toLowerCase().includes(q);
-    const matchesMode = !modeFilter || p.mode === modeFilter;
-    return matchesSearch && matchesMode;
-  });
-
-  if (!mounted) {
+  if (!mounted || !authReady) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050505]">
-        <p className="text-[#B0B0B0]">Loading…</p>
+        <p className="text-sm text-[#888]">Loading…</p>
       </div>
     );
   }
 
-  const authed = hasPpUser();
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#050505] px-6 py-12 font-sans text-[#ECECEC]">
+        <div className="mx-auto max-w-md text-center">
+          <Bookmark className="mx-auto mb-4 h-16 w-16 text-[#4552FF]" strokeWidth={1} aria-hidden />
+          <h2 className="mb-2 font-[family-name:var(--font-space-grotesk),sans-serif] text-2xl font-bold text-[#E7E6D9]">
+            Your Prompt Library
+          </h2>
+          <div className="mb-8">
+            <Link href="/" className="inline-block text-lg font-bold text-[#ECECEC]">
+              PromptPerfect
+            </Link>
+          </div>
+          <LibraryEmptyState message="Sign up to save prompts">
+            <Link
+              href="/signup"
+              className="inline-flex h-11 items-center justify-center rounded-[12px] bg-[linear-gradient(135deg,#4552FF,#5c6aff)] px-8 text-[15px] font-semibold text-white transition-opacity hover:opacity-95"
+            >
+              Sign up
+            </Link>
+          </LibraryEmptyState>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#050505]">
-      <header className="sticky top-0 z-10 border-b border-[#1a1a1a] bg-[#050505]/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between gap-4 px-4">
-          <Link
-            href="/app"
-            className="text-sm text-[#888] transition hover:text-[#ECECEC]"
-          >
-            ← Optimizer
+    <div className="min-h-screen bg-[#050505] px-6 py-8 font-sans text-[#ECECEC]">
+      <header className="mx-auto mb-8 flex max-w-4xl flex-wrap items-center justify-between gap-4 border-b border-[#1a1a1a] pb-4">
+        <div className="flex flex-col gap-1">
+          <Link href="/" className="text-lg font-bold text-[#ECECEC]">
+            PromptPerfect
           </Link>
-          <span className="font-heading text-sm font-medium text-[#E7E6D9]">
-            Library
-          </span>
-          {authed ? (
-            <Link
-              href="/profile"
-              className="text-sm text-[#888] transition hover:text-[#ECECEC]"
-            >
-              Profile
-            </Link>
-          ) : (
-            <Link
-              href="/login"
-              className="text-sm text-[#888] transition hover:text-[#ECECEC]"
-            >
-              Sign in
-            </Link>
-          )}
+          <h1 className="font-[family-name:var(--font-space-grotesk),sans-serif] text-2xl font-bold text-[#E7E6D9]">
+            Prompt Library
+          </h1>
+        </div>
+        <div className="flex flex-col items-end gap-1 text-right">
+          <span className="text-[13px] text-[#888]">{user.name || user.email}</span>
+          <span className="text-[12px] text-[#71717A]">{rows.length} saved</span>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <h1 className="font-heading text-3xl font-bold text-[#E7E6D9]">
-            Prompt Library
-          </h1>
-          <span className="text-sm text-[#71717A]">
-            {authed
-              ? search.trim() || modeFilter
-                ? `${filtered.length} of ${prompts.length} shown`
-                : `${prompts.length} saved`
-              : 'Sign in to save'}
-          </span>
-        </div>
-
-        {!authed ? (
-          <p className="mb-6 rounded-lg border border-[#252525] bg-[#0A0A0A]/80 px-4 py-3 text-sm text-[#B0B0B0]">
-            Your library lives on your account.{' '}
-            <Link href="/signup" className="text-[#4552FF] hover:underline">
-              Sign up
-            </Link>{' '}
-            or{' '}
-            <Link href="/login" className="text-[#4552FF] hover:underline">
-              log in
-            </Link>{' '}
-            to save prompts from the optimizer—guests can still browse this page.
-          </p>
-        ) : null}
-
-        {deleteError ? (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
-            {deleteError}
-          </div>
-        ) : null}
-
-        {loadError ? (
-          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            <p>{loadError}</p>
-            {loadHint ? (
-              <p className="mt-1 text-xs text-red-200/80">{loadHint}</p>
-            ) : null}
-            <Link
-              href="/login"
-              className="mt-2 inline-block text-[#4552FF] hover:underline"
-            >
-              Log in
-            </Link>
-          </div>
-        ) : null}
+      <main className="mx-auto max-w-4xl">
+        <label className="relative mb-4 block">
+          <span className="sr-only">Search saved prompts</span>
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search prompts…"
+            autoComplete="off"
+            className="w-full rounded-[12px] border border-[#252525] bg-[#0A0A0A] py-2.5 pl-10 pr-4 text-[14px] text-white outline-none placeholder:text-[#71717A] focus:border-[#4552FF]"
+          />
+        </label>
 
         <div
-          className={`mb-6 flex flex-col gap-4 sm:flex-row sm:items-center ${!authed ? 'opacity-60' : ''}`}
+          className="mb-4 flex flex-wrap gap-2"
+          role="group"
+          aria-label="Filter by optimization mode"
         >
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]"
-              aria-hidden
-            />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title or content…"
-              disabled={!authed}
-              className="w-full rounded-lg border border-[#252525] bg-[#0A0A0A] py-2.5 pl-10 pr-4 text-white placeholder-[#71717A] focus:border-[#4552FF] focus:outline-none disabled:cursor-not-allowed"
-            />
-          </div>
-          <div className="flex shrink-0 gap-2">
-            {(['better', 'specific', 'cot'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                disabled={!authed}
-                onClick={() =>
-                  setModeFilter(modeFilter === mode ? null : mode)
-                }
-                className={`rounded-lg px-3 py-2 font-heading text-sm transition disabled:cursor-not-allowed ${
-                  modeFilter === mode
-                    ? 'bg-[#4552FF] text-white'
-                    : 'border border-[#252525] bg-[#0A0A0A] text-[#B0B0B0] hover:border-[#4552FF]'
-                }`}
-              >
-                {mode === 'cot' ? 'CoT' : mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
-          </div>
+          {(
+            [
+              { id: 'all' as const, label: 'All' },
+              { id: 'better' as const, label: 'Better' },
+              { id: 'specific' as const, label: 'Specific' },
+              { id: 'cot' as const, label: 'CoT' },
+            ] as const
+          ).map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setModeFilter(id)}
+              aria-pressed={modeFilter === id}
+              className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                modeFilter === id
+                  ? 'border-[#4552FF] bg-[#4552FF]/20 text-[#ECECEC]'
+                  : 'border-[#2a2a2a] bg-[#0A0A0A] text-[#B0B0B0] hover:border-[#4552FF]/50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {loading ? (
-          <p className="py-16 text-center text-[#71717A]">Loading library…</p>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <Bookmark
-              className="mx-auto mb-4 h-12 w-12 text-[#4552FF]/80"
-              strokeWidth={1}
-              aria-hidden
-            />
-            <p className="text-[#B0B0B0]">
-              {search || modeFilter
-                ? 'No matching prompts'
-                : authed
-                  ? 'No saved prompts yet. Optimize a prompt and click “Save to Library”.'
-                  : 'No saved prompts yet. Create a free account to save prompts from the optimizer.'}
-            </p>
-            {!authed && !(search || modeFilter) ? (
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Link
-                  href="/signup"
-                  className="rounded-lg bg-[#4552FF] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-95"
-                >
-                  Sign up free
-                </Link>
-                <Link
-                  href="/login"
-                  className="rounded-lg border border-[#252525] px-5 py-2.5 text-sm text-[#E7E6D9] hover:border-[#4552FF]"
-                >
-                  Log in
-                </Link>
-              </div>
-            ) : null}
-          </div>
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : error ? (
+          <p className="text-sm text-red-400">{error}</p>
+        ) : rows.length === 0 ? (
+          <LibraryEmptyState message="No saved prompts yet" />
+        ) : filteredRows.length === 0 ? (
+          <p className="py-12 text-center text-sm text-[#71717A]">
+            {searchQuery.trim() || modeFilter !== 'all'
+              ? 'No matching prompts'
+              : 'No prompts match your filters.'}
+          </p>
         ) : (
-          <div className="space-y-3">
-            {filtered.map((prompt) => (
-              <div
-                key={prompt.id}
-                className="rounded-xl border border-[#252525] bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-4 transition hover:border-[#3F3F46]"
-              >
-                <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <ul className="flex flex-col gap-3">
+            {filteredRows.map((row) => {
+              const expanded = expandedId === row.id;
+              return (
+                <li
+                  key={row.id}
+                  className="rounded-xl border border-[#252525] bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-4 transition hover:border-[#3F3F46]"
+                >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() =>
-                      setExpandedId(expandedId === prompt.id ? null : prompt.id)
-                    }
+                    onClick={() => setExpandedId(expanded ? null : row.id)}
+                    className="flex w-full items-start justify-between gap-2 text-left"
                   >
-                    <h3 className="truncate font-heading font-medium text-[#E7E6D9]">
-                      {prompt.title}
-                    </h3>
-                    <p className="mt-1 truncate text-sm text-[#71717A]">
-                      {prompt.original_prompt.length > 80
-                        ? `${prompt.original_prompt.slice(0, 80)}…`
-                        : prompt.original_prompt}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(prompt.id)}
-                      disabled={deletingId === prompt.id || !authed}
-                      className="rounded-md p-1.5 text-[#71717A] transition hover:bg-red-500/15 hover:text-red-400 disabled:pointer-events-none disabled:opacity-30"
-                      aria-label={`Remove ${prompt.title} from library`}
-                      title={
-                        authed
-                          ? 'Remove from library'
-                          : 'Sign in to manage saves'
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                    <span
-                      className={`rounded px-2 py-0.5 font-heading text-xs ${
-                        prompt.mode === 'better'
-                          ? 'bg-[#4552FF]/20 text-[#4552FF]'
-                          : prompt.mode === 'specific'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-orange-500/20 text-orange-400'
-                      }`}
-                    >
-                      {prompt.mode === 'cot' ? 'CoT' : prompt.mode}
-                    </span>
-                    <span className="text-xs text-[#71717A]">
-                      {new Date(prompt.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-
-                {expandedId === prompt.id ? (
-                  <div className="mt-4 border-t border-[#252525] pt-4">
-                    <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div>
-                        <p className="mb-1 text-xs text-[#71717A]">Original</p>
-                        <p className="whitespace-pre-wrap text-sm text-[#B0B0B0]">
-                          {prompt.original_prompt}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="mb-1 text-xs text-[#71717A]">Optimized</p>
-                        <p className="whitespace-pre-wrap text-sm text-[#ECECEC]">
-                          {prompt.optimized_prompt}
-                        </p>
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate font-[family-name:var(--font-space-grotesk),sans-serif] text-[15px] font-medium text-[#E7E6D9]">
+                        {row.title}
+                      </h2>
+                      <p className="mt-1 truncate text-[13px] text-[#aaa]">
+                        {previewText(row.original_prompt)}
+                      </p>
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleReoptimize(prompt);
-                        }}
-                        className="flex items-center gap-1.5 text-sm text-[#4552FF] hover:underline"
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded px-2 py-0.5 text-[11px] font-medium ${
+                          row.mode === 'better'
+                            ? 'bg-[#4552FF]/20 text-[#4552FF]'
+                            : row.mode === 'specific'
+                              ? 'bg-green-500/20 text-green-400'
+                              : 'bg-orange-500/20 text-orange-400'
+                        }`}
                       >
-                        <ArrowRight size={14} aria-hidden />
-                        Re-optimize
-                      </button>
+                        {modeBadgeLabel(row.mode)}
+                      </span>
+                      <span className="text-[11px] text-[#71717A]">
+                        {new Date(row.created_at).toLocaleDateString()}
+                      </span>
+                      {expanded ? (
+                        <ChevronUp className="h-4 w-4 text-[#71717A]" aria-hidden />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-[#71717A]" aria-hidden />
+                      )}
                     </div>
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+                  </button>
+
+                  {expanded ? (
+                    <div className="mt-4 border-t border-[#252525] pt-4">
+                      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-[11px] text-[#71717A]">Original</p>
+                          <p className="whitespace-pre-wrap text-sm text-[#B0B0B0]">
+                            {row.original_prompt || '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-[11px] text-[#71717A]">Optimized</p>
+                          <p className="whitespace-pre-wrap text-sm text-[#ECECEC]">
+                            {row.optimized_prompt || '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleReoptimize(row)}
+                          className="inline-flex items-center gap-1.5 text-sm text-[#4552FF] hover:underline"
+                        >
+                          <ArrowRight size={14} aria-hidden />
+                          Re-optimize
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(row.id)}
+                          className="inline-flex items-center gap-1.5 text-sm text-red-400 hover:underline"
+                        >
+                          <Trash2 size={14} aria-hidden />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </main>
     </div>

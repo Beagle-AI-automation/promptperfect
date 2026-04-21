@@ -1,57 +1,80 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('nanoid', () => ({
-  nanoid: vi.fn(() => 'abcdefghijkl'),
-}));
-
+import { describe, it, expect, beforeEach } from "vitest";
 import {
-  clearGuestLocalStorage,
-  getGuestCount,
+  GUEST_TOKEN_LIMIT,
   getGuestId,
+  getGuestCount,
   getGuestLimit,
-  GUEST_LIMIT,
-  incrementGuestCount,
-  isGuestLimitReached,
   setGuestCount,
-} from './guest';
+  incrementGuestCount,
+  clearGuestSession,
+  isGuestLimitReached,
+} from "./guest";
 
-describe('guest utilities', () => {
+function mockStorage(): Storage {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = v;
+    },
+    removeItem: (k) => {
+      delete store[k];
+    },
+    clear: () => {
+      store = {};
+    },
+    key: (i) => Object.keys(store)[i] ?? null,
+    get length() {
+      return Object.keys(store).length;
+    },
+  };
+}
+
+describe("guest utilities", () => {
+  let storage: Storage;
+
   beforeEach(() => {
-    localStorage.clear();
-    vi.clearAllMocks();
+    storage = mockStorage();
   });
 
-  it('getGuestId creates and persists a stable id', () => {
-    const a = getGuestId();
-    const b = getGuestId();
-    expect(a).toBe('guest_abcdefghijkl');
-    expect(b).toBe(a);
-    expect(localStorage.getItem('pp_guest_id')).toBe(a);
+  it("getGuestId creates and reuses an id", () => {
+    const a = getGuestId(storage);
+    expect(a.length).toBeGreaterThan(0);
+    expect(getGuestId(storage)).toBe(a);
   });
 
-  it('getGuestCount returns 0 by default', () => {
-    expect(getGuestCount()).toBe(0);
+  it("getGuestCount returns 0 by default", () => {
+    expect(getGuestCount(storage)).toBe(0);
   });
 
-  it('setGuestCount and incrementGuestCount update storage', () => {
-    setGuestCount(3);
-    expect(getGuestCount()).toBe(3);
-    expect(incrementGuestCount()).toBe(4);
-    expect(getGuestCount()).toBe(4);
+  it("setGuestCount and getGuestCount round-trip", () => {
+    setGuestCount(12, storage);
+    expect(getGuestCount(storage)).toBe(12);
   });
 
-  it('isGuestLimitReached when count meets GUEST_LIMIT', () => {
-    expect(isGuestLimitReached()).toBe(false);
-    setGuestCount(GUEST_LIMIT);
-    expect(isGuestLimitReached()).toBe(true);
-    expect(getGuestLimit()).toBe(GUEST_LIMIT);
+  it("isGuestLimitReached respects limit", () => {
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT - 1, GUEST_TOKEN_LIMIT)).toBe(false);
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT, GUEST_TOKEN_LIMIT)).toBe(true);
+    expect(isGuestLimitReached(GUEST_TOKEN_LIMIT + 1, GUEST_TOKEN_LIMIT)).toBe(true);
   });
 
-  it('clearGuestLocalStorage removes fingerprint and count', () => {
-    getGuestId();
-    setGuestCount(2);
-    clearGuestLocalStorage();
-    expect(localStorage.getItem('pp_guest_id')).toBeNull();
-    expect(localStorage.getItem('pp_guest_count')).toBeNull();
+  it("getGuestLimit matches constant", () => {
+    expect(getGuestLimit()).toBe(GUEST_TOKEN_LIMIT);
+  });
+
+  it("incrementGuestCount bumps stored count", () => {
+    setGuestCount(5, storage);
+    expect(incrementGuestCount(2, storage)).toBe(7);
+    expect(getGuestCount(storage)).toBe(7);
+    expect(incrementGuestCount(1, storage)).toBe(8);
+  });
+
+  it("clearGuestSession removes id and token count", () => {
+    getGuestId(storage);
+    setGuestCount(3, storage);
+    clearGuestSession(storage);
+    expect(storage.getItem("pp_guest_id")).toBeNull();
+    expect(storage.getItem("pp_guest_tokens_used")).toBeNull();
+    expect(getGuestCount(storage)).toBe(0);
   });
 });

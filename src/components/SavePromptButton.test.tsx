@@ -1,106 +1,86 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { SavePromptButton } from './SavePromptButton';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { SavePromptButton } from "./SavePromptButton";
 
-vi.mock('@/lib/client/supabaseBrowser', () => ({
-  createSupabaseBrowserClient: vi.fn(() => ({})),
+const insertFn = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ error: null })
+);
+
+vi.mock("@/lib/supabase", () => ({
+  getSupabaseClient: () => ({
+    from: () => ({
+      insert: insertFn,
+    }),
+  }),
 }));
 
-const mockHeaders = vi.fn(async () => ({
-  Authorization: 'Bearer test-token',
-}));
-
-vi.mock('@/lib/client/promptPerfectAuthHeaders', () => ({
-  getPromptPerfectAuthHeaders: () => mockHeaders(),
-}));
-
-describe('SavePromptButton', () => {
+describe("SavePromptButton", () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        Response.json({}, { status: 200 }),
-      ) as unknown as typeof fetch,
-    );
-    mockHeaders.mockResolvedValue({
-      Authorization: 'Bearer test-token',
-    });
+    insertFn.mockClear();
+    insertFn.mockResolvedValue({ error: null });
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('renders nothing without userId', () => {
+  it("renders nothing without userId", () => {
     const { container } = render(
       <SavePromptButton
         originalPrompt="a"
         optimizedPrompt="b"
-        explanation="c"
+        explanation=""
         mode="better"
         provider="gemini"
         userId={null}
-      />,
+      />
     );
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows Save to Library when signed in', () => {
+  it("shows Save to Library when userId is set", async () => {
     render(
       <SavePromptButton
         originalPrompt="orig"
         optimizedPrompt="opt"
-        explanation="expl"
+        explanation="ex"
         mode="better"
         provider="gemini"
         userId="user-1"
-      />,
+      />
     );
-    expect(screen.getByRole('button', { name: /Save to Library/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /save to library/i })
+    ).toBeInTheDocument();
   });
 
-  it('shows title input and saves via API', async () => {
+  it("opens title input and saves via Supabase", async () => {
     render(
       <SavePromptButton
         originalPrompt="orig"
         optimizedPrompt="opt"
-        explanation="expl"
+        explanation="ex"
         mode="better"
         provider="gemini"
         userId="user-1"
-      />,
+      />
     );
     fireEvent.click(
-      screen.getAllByRole('button', { name: /Save to Library/i })[0]!,
+      await screen.findByRole("button", { name: /save to library/i })
     );
-
-    const titleInput = screen.getByPlaceholderText(/Name this prompt/i);
-    fireEvent.change(titleInput, { target: { value: 'My title' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+    const input = screen.getByLabelText(/prompt title/i);
+    fireEvent.change(input, { target: { value: "My title" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(insertFn).toHaveBeenCalled();
     });
-    const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe('/api/saved-prompts');
-    expect(call[1]?.method).toBe('POST');
-    const body = JSON.parse((call[1] as RequestInit).body as string);
-    expect(body.title).toBe('My title');
-    expect(body.original_prompt).toBe('orig');
-  });
-
-  it('shows Saved! when alreadySaved', () => {
-    render(
-      <SavePromptButton
-        originalPrompt="a"
-        optimizedPrompt="b"
-        explanation="c"
-        mode="better"
-        provider="gemini"
-        userId="user-1"
-        alreadySaved
-      />,
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-1",
+        title: "My title",
+        original_prompt: "orig",
+        optimized_prompt: "opt",
+        explanation: "ex",
+        mode: "better",
+        provider: "gemini",
+      })
     );
-    expect(screen.getByText(/Saved!/i)).toBeInTheDocument();
   });
 });

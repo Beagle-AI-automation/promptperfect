@@ -835,7 +835,7 @@ export default function AppPage() {
       )}
 
       <DemoLimitModal
-        open={showLimitModal}
+        isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
       />
 
