@@ -131,7 +131,7 @@ export async function computeOptimizationFeedbackAnalytics(
     .in('session_id', ids)
     .order('created_at', { ascending: true });
 
-  let collected: OptimizationLogThumbRow[] =
+  const collected: OptimizationLogThumbRow[] =
     !qSess.error && qSess.data?.length
       ? (qSess.data as OptimizationLogThumbRow[])
       : [];

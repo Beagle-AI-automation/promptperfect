@@ -63,12 +63,16 @@ export function StatsBar({
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const onStatsFetchedRef = useRef(onStatsFetched);
-  onStatsFetchedRef.current = onStatsFetched;
+
+  useEffect(() => {
+    onStatsFetchedRef.current = onStatsFetched;
+  }, [onStatsFetched]);
 
   /** Hydrate from sessionStorage before fetch so Profile → /app does not flash zeros. */
   useLayoutEffect(() => {
     const uid = cacheUserId?.trim();
     if (!uid) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync cache reset before paint
       setStats(null);
       setLoading(true);
       return;

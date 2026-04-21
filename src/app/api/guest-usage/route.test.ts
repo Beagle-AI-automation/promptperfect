@@ -1,25 +1,56 @@
-import { describe, it, expect } from 'vitest';
-import { GUEST_LIMIT } from '@/lib/guest';
-import { GET, POST } from './route';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { GUEST_LIMIT } from "@/lib/guest";
+import * as supabaseLib from "@/lib/supabase";
+import { GET, POST } from "./route";
 
-describe('/api/guest-usage GET', () => {
-  it('returns default count and limit when guestId is missing', async () => {
-    const res = await GET(new Request('http://localhost/api/guest-usage'));
+vi.mock("@/lib/supabase", () => ({
+  getSupabaseClient: vi.fn(),
+}));
+
+function buildGuestUsageClient() {
+  const upsert = vi.fn().mockResolvedValue({});
+  const single = vi
+    .fn()
+    .mockResolvedValue({ data: { optimization_count: 0 } });
+  const from = vi.fn(() => ({
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        single,
+      })),
+    })),
+    upsert,
+  }));
+  return { from, upsert, single };
+}
+
+describe("/api/guest-usage GET", () => {
+  it("returns default count and limit when guestId is missing", async () => {
+    const res = await GET(new Request("http://localhost/api/guest-usage"));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.count).toBe(0);
     expect(data.limit).toBe(GUEST_LIMIT);
     expect(data.remaining).toBe(GUEST_LIMIT);
-    expect(data.serverTracking).toBe(true);
   });
 });
 
-describe('/api/guest-usage POST', () => {
-  it('returns 400 when guestId is missing', async () => {
+describe("/api/guest-usage POST", () => {
+  beforeEach(() => {
+    vi.mocked(supabaseLib.getSupabaseClient).mockReset();
+  });
+
+  it("returns 400 when guestId is missing", async () => {
+    const client = buildGuestUsageClient();
+    vi.mocked(supabaseLib.getSupabaseClient).mockReturnValue(
+      client as unknown as NonNullable<
+        ReturnType<typeof supabaseLib.getSupabaseClient>
+      >,
+    );
+
     const res = await POST(
-      new Request('http://localhost/api/guest-usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      new Request("http://localhost/api/guest-usage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       }),
     );
@@ -28,17 +59,18 @@ describe('/api/guest-usage POST', () => {
     expect(data.error).toMatch(/Guest ID required/i);
   });
 
-  it('returns persisted false and limit when Supabase is not configured', async () => {
+  it("returns 503 when Supabase is not configured", async () => {
+    vi.mocked(supabaseLib.getSupabaseClient).mockReturnValue(null);
+
     const res = await POST(
-      new Request('http://localhost/api/guest-usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guestId: 'guest_test123' }),
+      new Request("http://localhost/api/guest-usage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestId: "guest_test123" }),
       }),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     const data = await res.json();
-    expect(data.persisted).toBe(false);
-    expect(data.limit).toBe(GUEST_LIMIT);
+    expect(data.error).toMatch(/Database not configured/i);
   });
 });

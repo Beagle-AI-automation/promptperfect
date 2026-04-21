@@ -2,22 +2,34 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SavePromptButton } from "./SavePromptButton";
 
-const insertFn = vi.hoisted(() =>
-  vi.fn().mockResolvedValue({ error: null })
+const fetchMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({}),
+  }),
 );
 
-vi.mock("@/lib/supabase", () => ({
-  getSupabaseClient: () => ({
-    from: () => ({
-      insert: insertFn,
+vi.mock("@/lib/client/supabaseBrowser", () => ({
+  createSupabaseBrowserClient: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/client/promptPerfectAuthHeaders", () => ({
+  getPromptPerfectAuthHeaders: vi.fn(() =>
+    Promise.resolve({
+      "Content-Type": "application/json",
+      Authorization: "Bearer test-token",
     }),
-  }),
+  ),
 }));
 
 describe("SavePromptButton", () => {
   beforeEach(() => {
-    insertFn.mockClear();
-    insertFn.mockResolvedValue({ error: null });
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   it("renders nothing without userId", () => {
@@ -29,7 +41,7 @@ describe("SavePromptButton", () => {
         mode="better"
         provider="gemini"
         userId={null}
-      />
+      />,
     );
     expect(container.firstChild).toBeNull();
   });
@@ -43,14 +55,14 @@ describe("SavePromptButton", () => {
         mode="better"
         provider="gemini"
         userId="user-1"
-      />
+      />,
     );
     expect(
-      await screen.findByRole("button", { name: /save to library/i })
+      await screen.findByRole("button", { name: /save to library/i }),
     ).toBeInTheDocument();
   });
 
-  it("opens title input and saves via Supabase", async () => {
+  it("opens title input and saves via /api/saved-prompts", async () => {
     render(
       <SavePromptButton
         originalPrompt="orig"
@@ -59,28 +71,35 @@ describe("SavePromptButton", () => {
         mode="better"
         provider="gemini"
         userId="user-1"
-      />
+      />,
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: /save to library/i })
+      await screen.findByRole("button", { name: /save to library/i }),
     );
-    const input = screen.getByLabelText(/prompt title/i);
+    const input = screen.getByPlaceholderText(/name this prompt/i);
     fireEvent.change(input, { target: { value: "My title" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(insertFn).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalled();
     });
-    expect(insertFn).toHaveBeenCalledWith(
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/saved-prompts",
       expect.objectContaining({
-        user_id: "user-1",
-        title: "My title",
-        original_prompt: "orig",
-        optimized_prompt: "opt",
-        explanation: "ex",
-        mode: "better",
-        provider: "gemini",
-      })
+        method: "POST",
+      }),
     );
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string);
+    expect(body).toMatchObject({
+      title: "My title",
+      original_prompt: "orig",
+      optimized_prompt: "opt",
+      explanation: "ex",
+      mode: "better",
+      provider: "gemini",
+    });
   });
 });
