@@ -56,8 +56,10 @@ function mergeLogsBySession(
 
 /**
  * Thumbs + optional average prompt score for analytics (no extra DB columns).
- * Joins `optimization_logs.session_id` to `pp_optimization_history.optimize_session_id`
- * for this user — same per-run id as `/api/optimize` and `saveToHistory`.
+ * Only counts feedback for `optimization_logs.session_id` values that still match this
+ * user's **current** `pp_optimization_history` rows (`id` and/or `optimize_session_id`).
+ * Orphan logs (e.g. after history delete, or user_id-only rows with no history) are excluded
+ * so the bar stays aligned with the History list.
  */
 export async function computeOptimizationFeedbackAnalytics(
   admin: SupabaseClient,
@@ -69,61 +71,88 @@ export async function computeOptimizationFeedbackAnalytics(
 }> {
   const empty = { thumbsUp: 0, thumbsDown: 0, avgScore: null as number | null };
 
-  const collected: OptimizationLogThumbRow[] = [];
+  let histRows: {
+    id: string;
+    optimize_session_id?: string | null;
+  }[] | null = null;
 
-  /** Logs recorded with signed-in user (preferred; works even without history.optimize_session_id). */
-  const byUser = await admin
+  const histFull = await admin
+    .from('pp_optimization_history')
+    .select('id, optimize_session_id')
+    .eq('user_id', userId);
+
+  if (!histFull.error && Array.isArray(histFull.data)) {
+    histRows = histFull.data as {
+      id: string;
+      optimize_session_id?: string | null;
+    }[];
+  } else if (
+    histFull.error &&
+    /optimize_session_id|schema cache|could not find/i.test(
+      histFull.error.message,
+    )
+  ) {
+    const histLegacy = await admin
+      .from('pp_optimization_history')
+      .select('id')
+      .eq('user_id', userId);
+    if (!histLegacy.error && Array.isArray(histLegacy.data)) {
+      histRows = histLegacy.data as { id: string }[];
+    }
+  }
+
+  if (!histRows?.length) {
+    return empty;
+  }
+
+  const allowedSessions = new Set<string>();
+  for (const raw of histRows) {
+    if (typeof raw.id === 'string' && raw.id.trim()) {
+      allowedSessions.add(raw.id.trim());
+    }
+    if (
+      typeof raw.optimize_session_id === 'string' &&
+      raw.optimize_session_id.trim()
+    ) {
+      allowedSessions.add(raw.optimize_session_id.trim());
+    }
+  }
+
+  if (allowedSessions.size === 0) {
+    return empty;
+  }
+
+  const ids = [...allowedSessions];
+  const qSess = await admin
+    .from('optimization_logs')
+    .select(
+      'session_id, feedback, rating, prompt_score, created_at',
+    )
+    .in('session_id', ids)
+    .order('created_at', { ascending: true });
+
+  let collected: OptimizationLogThumbRow[] =
+    !qSess.error && qSess.data?.length
+      ? (qSess.data as OptimizationLogThumbRow[])
+      : [];
+
+  /** Same rows keyed by session + user (covers edge cases where session-only query lags replication). */
+  const qUser = await admin
     .from('optimization_logs')
     .select(
       'session_id, feedback, rating, prompt_score, created_at',
     )
     .eq('user_id', userId)
+    .in('session_id', ids)
     .order('created_at', { ascending: true });
 
-  if (
-    !byUser.error &&
-    Array.isArray(byUser.data) &&
-    byUser.data.length > 0
-  ) {
-    collected.push(...(byUser.data as OptimizationLogThumbRow[]));
+  if (!qUser.error && qUser.data?.length) {
+    collected.push(...(qUser.data as OptimizationLogThumbRow[]));
   }
 
-  /** Legacy link: session_id matches pp_optimization_history.optimize_session_id. */
-  const histRes = await admin
-    .from('pp_optimization_history')
-    .select('optimize_session_id')
-    .eq('user_id', userId);
-
-  let sessionIds: string[] = [];
-  if (!histRes.error && histRes.data?.length) {
-    const rows = histRes.data as {
-      optimize_session_id?: string | null;
-    }[];
-    const ids = rows
-      .map((r) =>
-        typeof r.optimize_session_id === 'string'
-          ? r.optimize_session_id.trim()
-          : '',
-      )
-      .filter((id) => id.length > 0);
-    sessionIds = [...new Set(ids)];
+  if (collected.length === 0) {
+    return empty;
   }
-
-  if (sessionIds.length > 0) {
-    const qSess = await admin
-      .from('optimization_logs')
-      .select(
-        'session_id, feedback, rating, prompt_score, created_at',
-      )
-      .in('session_id', sessionIds)
-      .order('created_at', { ascending: true });
-
-    if (!qSess.error && qSess.data?.length) {
-      collected.push(...(qSess.data as OptimizationLogThumbRow[]));
-    }
-  }
-
-  if (collected.length === 0) return empty;
 
   const merged = mergeLogsBySession(collected);
   let thumbsUp = 0;

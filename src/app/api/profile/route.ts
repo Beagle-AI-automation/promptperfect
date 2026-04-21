@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import {
+  isUniqueViolation,
+  mapProfileUniqueViolation,
+} from '@/lib/server/profileConstraintErrors';
 import { computeOptimizationFeedbackAnalytics } from '@/lib/server/optimizationLogStats';
 import {
   getDbForIdentity,
@@ -89,6 +93,22 @@ export async function GET(request: Request) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
       status: 401,
     });
+  }
+
+  const adminForConfirm = getSupabaseAdminClient();
+  if (adminForConfirm) {
+    const { data: gotrue, error: guErr } =
+      await adminForConfirm.auth.admin.getUserById(identity.userId);
+    if (!guErr && gotrue?.user && !gotrue.user.email_confirmed_at) {
+      return NextResponse.json(
+        {
+          error:
+            'Please confirm your email before using PromptPerfect. Check your inbox for the confirmation link.',
+          code: 'EMAIL_NOT_CONFIRMED',
+        },
+        { status: 403 },
+      );
+    }
   }
 
   const db = getDbForIdentity(identity);
@@ -288,6 +308,22 @@ export async function PATCH(request: Request) {
     });
   }
 
+  const adminGate = getSupabaseAdminClient();
+  if (adminGate) {
+    const { data: gotrue, error: guErr } =
+      await adminGate.auth.admin.getUserById(identity.userId);
+    if (!guErr && gotrue?.user && !gotrue.user.email_confirmed_at) {
+      return NextResponse.json(
+        {
+          error:
+            'Please confirm your email before editing your profile. Check your inbox for the confirmation link.',
+          code: 'EMAIL_NOT_CONFIRMED',
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   const body = (await request.json().catch(() => null)) as Record<
     string,
     unknown
@@ -364,11 +400,15 @@ export async function PATCH(request: Request) {
 
   const nextDisplay =
     display_name !== undefined
-      ? display_name
+      ? display_name === ''
+        ? null
+        : display_name
       : (current?.display_name ?? null);
   const nextAvatar =
     avatar_url !== undefined
-      ? avatar_url
+      ? avatar_url === ''
+        ? null
+        : avatar_url
       : (current?.avatar_url ?? null);
 
   const updatedAt = new Date().toISOString();
@@ -387,6 +427,15 @@ export async function PATCH(request: Request) {
     .maybeSingle();
 
   if (error) {
+    if (isUniqueViolation(error.message)) {
+      return NextResponse.json(
+        {
+          error: mapProfileUniqueViolation(error.message),
+          code: 'PROFILE_UNIQUE_VIOLATION',
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -400,7 +449,7 @@ export async function PATCH(request: Request) {
   if (display_name !== undefined) {
     await db
       .from('pp_users')
-      .update({ name: display_name || null })
+      .update({ name: nextDisplay || null })
       .eq('id', identity.userId);
   }
 

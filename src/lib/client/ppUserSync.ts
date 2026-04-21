@@ -1,6 +1,9 @@
 'use client';
 
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
+import { clearNavProfileCache } from '@/lib/client/navProfileCache';
+import { clearStatsBarCache } from '@/lib/client/statsBarCache';
+import { wipeBrowserSupabaseSession } from '@/lib/client/supabaseBrowserSessionWipe';
 
 /** Serialize auth calls — concurrent getUser/getSession steal the GoTrue storage lock (Next/Turbopack). */
 let authChain: Promise<unknown> = Promise.resolve();
@@ -143,18 +146,28 @@ export async function syncPpUserFromAuthSession(
   return true;
 }
 
-/** Clear app login state and Supabase cookies so the next sign-in writes a fresh `pp_user`. */
+/** Clear app login state and Supabase session so `/app` does not re-sync `pp_user`. */
 export async function clearPromptPerfectLocalAuth(
   supabase: SupabaseClient | null,
 ): Promise<void> {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('pp_user');
-  }
   if (supabase) {
     try {
-      await supabase.auth.signOut({ scope: 'local' });
+      /** Default `global` revokes refresh token server-side and clears browser session. */
+      await supabase.auth.signOut();
     } catch {
-      /* session storage lock or network — pp_user is already cleared */
+      /* network / lock — fall through to local wipe */
     }
+  }
+
+  wipeBrowserSupabaseSession();
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('pp_user');
+    } catch {
+      /* ignore */
+    }
+    clearNavProfileCache();
+    clearStatsBarCache();
   }
 }

@@ -1,9 +1,13 @@
 'use client';
 
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import {
+  readStatsBarCache,
+  writeStatsBarCache,
+} from '@/lib/client/statsBarCache';
 
 interface Stats {
   total: number;
@@ -14,12 +18,24 @@ interface Stats {
   byProvider: Record<string, number>;
 }
 
+interface StatsApiPayload extends Stats {
+  error?: string;
+  /** False when identity headers were missing server-side (not “real” zero analytics). */
+  authenticated?: boolean;
+}
+
 interface StatsBarProps {
   refreshTrigger?: number;
+  /** Signed-in user id — used to persist stats in sessionStorage across navigations. */
+  cacheUserId?: string | null;
   /** Shown until the next successful stats fetch (instant +1 on feedback). */
   optimisticThumbs?: { up: number; down: number };
-  /** Reset parent optimistic state after server stats have loaded. */
-  onStatsFetched?: () => void;
+  /** Called with server thumb counts after a successful /api/stats response. */
+  onStatsFetched?: (payload: { thumbsUp: number; thumbsDown: number }) => void;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function StatLabel({ children }: { children: React.ReactNode }) {
@@ -40,6 +56,7 @@ function StatValue({ children }: { children: React.ReactNode }) {
 
 export function StatsBar({
   refreshTrigger = 0,
+  cacheUserId = null,
   optimisticThumbs = { up: 0, down: 0 },
   onStatsFetched,
 }: StatsBarProps) {
@@ -47,6 +64,31 @@ export function StatsBar({
   const [loading, setLoading] = useState(true);
   const onStatsFetchedRef = useRef(onStatsFetched);
   onStatsFetchedRef.current = onStatsFetched;
+
+  /** Hydrate from sessionStorage before fetch so Profile → /app does not flash zeros. */
+  useLayoutEffect(() => {
+    const uid = cacheUserId?.trim();
+    if (!uid) {
+      setStats(null);
+      setLoading(true);
+      return;
+    }
+    const cached = readStatsBarCache(uid);
+    if (cached) {
+      setStats({
+        total: cached.total,
+        thumbsUp: cached.thumbsUp,
+        thumbsDown: cached.thumbsDown,
+        avgScore: cached.avgScore,
+        byMode: cached.byMode ?? {},
+        byProvider: cached.byProvider ?? {},
+      });
+      setLoading(false);
+    } else {
+      setStats(null);
+      setLoading(true);
+    }
+  }, [cacheUserId]);
 
   useEffect(() => {
     const emptyStats: Stats = {
@@ -59,43 +101,95 @@ export function StatsBar({
     };
 
     let cancelled = false;
+    const uid = cacheUserId?.trim();
+    const hadWarmOnStart = Boolean(uid && readStatsBarCache(uid));
 
     void (async () => {
       const supabase = createSupabaseBrowserClient();
-      const headers = supabase
-        ? await getPromptPerfectAuthHeaders(supabase)
-        : null;
+      if (!supabase) {
+        if (!cancelled) {
+          if (!hadWarmOnStart) setStats(emptyStats);
+          setLoading(false);
+        }
+        return;
+      }
 
-      try {
-        const r = await fetch('/api/stats', {
-          headers: headers ?? {},
-        });
-        const data = (await r.json()) as Stats & { error?: string };
+      if (!hadWarmOnStart) setLoading(true);
+
+      const run = async (attempt: number): Promise<void> => {
         if (cancelled) return;
-        if (!r.ok || data.error) {
-          setStats(emptyStats);
+
+        const headers = await getPromptPerfectAuthHeaders(supabase);
+        if (!headers) {
+          if (attempt < 14 && uid) {
+            await sleep(100 + attempt * 85);
+            await run(attempt + 1);
+            return;
+          }
+          if (!cancelled && !hadWarmOnStart) setStats(emptyStats);
           return;
         }
-        setStats({
-          total: data.total ?? 0,
-          thumbsUp: data.thumbsUp ?? 0,
-          thumbsDown: data.thumbsDown ?? 0,
-          avgScore: data.avgScore ?? null,
-          byMode: data.byMode ?? {},
-          byProvider: data.byProvider ?? {},
-        });
-        if (!cancelled) onStatsFetchedRef.current?.();
-      } catch {
-        if (!cancelled) setStats(emptyStats);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+
+        try {
+          const r = await fetch('/api/stats', {
+            headers,
+          });
+          const data = (await r.json()) as StatsApiPayload;
+          if (cancelled) return;
+
+          if (!r.ok || data.error) {
+            if (!hadWarmOnStart) setStats(emptyStats);
+            return;
+          }
+
+          /** Returning from Profile, auth headers can lag; API sends zeros + authenticated:false without a session. */
+          if (data.authenticated === false) {
+            if (attempt < 14 && uid) {
+              await sleep(140 + attempt * 95);
+              await run(attempt + 1);
+              return;
+            }
+            if (!hadWarmOnStart) setStats(emptyStats);
+            return;
+          }
+
+          const thumbsUp = data.thumbsUp ?? 0;
+          const thumbsDown = data.thumbsDown ?? 0;
+          const next: Stats = {
+            total: data.total ?? 0,
+            thumbsUp,
+            thumbsDown,
+            avgScore: data.avgScore ?? null,
+            byMode: data.byMode ?? {},
+            byProvider: data.byProvider ?? {},
+          };
+
+          setStats(next);
+          if (uid) {
+            writeStatsBarCache(uid, {
+              total: next.total,
+              thumbsUp: next.thumbsUp,
+              thumbsDown: next.thumbsDown,
+              avgScore: next.avgScore,
+              byMode: next.byMode,
+              byProvider: next.byProvider,
+            });
+          }
+          onStatsFetchedRef.current?.({ thumbsUp, thumbsDown });
+        } catch {
+          if (!hadWarmOnStart) setStats(emptyStats);
+        }
+      };
+
+      await run(0);
+
+      if (!cancelled) setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, cacheUserId]);
 
   const shellClass =
     'w-full rounded-xl border border-[#252525] bg-gradient-to-b from-white/[0.04] to-[#0A0A0A] px-4 py-3.5 sm:px-5 sm:py-4';

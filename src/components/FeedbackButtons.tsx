@@ -159,7 +159,7 @@ export function FeedbackButtons({
       </div>
       {!sessionId?.trim() && !loading && (
         <p className="text-xs text-[#71717A]">
-          Feedback is available for new runs. Re-optimize to register feedback on very old history.
+          Run Optimize or choose an item from history to attach feedback.
         </p>
       )}
       {error && <p className="text-sm text-red-400">{error}</p>}

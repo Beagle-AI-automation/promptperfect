@@ -1,17 +1,18 @@
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import {
+  CHANGES_DELIMITER,
+  EXPLANATION_DELIMITER,
+  stripPromptScoreMarkers,
+} from '@/lib/delimiter';
 
 const SESSION_STORAGE_KEY = 'pp:optimization_session_id';
-
-const EXPLANATION_DELIMITER = '---EXPLANATION---';
-const CHANGES_DELIMITER = '---CHANGES---';
-const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
 
 /** Parse full optimize API / stream text into optimized prompt (matches StreamingPromptOutput). */
 export function optimizedTextFromFullCompletion(fullText: string): string {
   const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
   const before = explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
-  return before.replace(SCORE_PATTERN, '').trim();
+  return stripPromptScoreMarkers(before);
 }
 
 /** Parse explanation segment from full optimize stream/sync text. */

@@ -6,6 +6,7 @@ import {
   useState,
   type MouseEvent,
 } from 'react';
+import { Plus } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
 import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
@@ -24,6 +25,8 @@ export interface OptimizationHistoryItem {
 
 interface HistoryPanelProps {
   onSelect: (item: OptimizationHistoryItem) => void;
+  /** Clears the composer and returns to a blank “new prompt” state (sidebar control). */
+  onNewPrompt?: () => void;
   /** Called after a row is removed via the API (library rows linked to that history are removed server-side). */
   onDeleted?: (id: string) => void;
   refreshTrigger?: number;
@@ -53,6 +56,7 @@ function formatTime(iso: string): string {
 
 export function HistoryPanel({
   onSelect,
+  onNewPrompt,
   onDeleted,
   refreshTrigger = 0,
   selectedId = null,
@@ -196,10 +200,22 @@ export function HistoryPanel({
 
   return (
     <div className="flex h-full flex-col border-l border-[#1a1a1a] bg-[#0a0a0a]">
-      <div className="shrink-0 border-b border-[#1a1a1a] px-3 py-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#1a1a1a] px-3 py-2">
         <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#666]">
           History
         </span>
+        {onNewPrompt ? (
+          <button
+            type="button"
+            onClick={() => onNewPrompt()}
+            title="New prompt"
+            aria-label="New prompt"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#2a2a2a] bg-[#141414] px-2.5 text-[12px] font-medium text-[#ccc] transition hover:border-[#3f3f46] hover:bg-[#1a1a1a] hover:text-[#E7E6D9]"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+            <span className="hidden sm:inline">New</span>
+          </button>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pp-history-scroll">
         {loading ? (

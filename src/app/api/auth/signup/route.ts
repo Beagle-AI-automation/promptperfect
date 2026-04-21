@@ -101,12 +101,7 @@ export async function POST(request: Request) {
     )
   }
 
-  if (name) {
-    await supabase
-      .from('pp_user_profiles')
-      .update({ display_name: name })
-      .eq('id', uid)
-  }
+  /** Profile display_name comes from auth trigger (globally unique). Do not overwrite with plain signup name — avoids collisions. */
 
   const { data: profile } = await supabase
     .from('pp_users')
@@ -122,15 +117,29 @@ export async function POST(request: Request) {
     model: 'gemini-2.0-flash',
   }
 
-  if (signUpData.session) {
+  /**
+   * Only return a session when the address is verified. (Supabase should not
+   * return a session if “Confirm email” is on; this is a safety net if the
+   * project has that option disabled.)
+   */
+  const authUser = signUpData.user
+  if (signUpData.session && authUser) {
+    if (authUser.email_confirmed_at) {
+      return NextResponse.json({
+        verificationRequired: false,
+        email,
+        user: userPayload,
+        session: {
+          access_token: signUpData.session.access_token,
+          refresh_token: signUpData.session.refresh_token,
+        },
+      })
+    }
     return NextResponse.json({
-      verificationRequired: false,
+      verificationRequired: true,
       email,
-      user: userPayload,
-      session: {
-        access_token: signUpData.session.access_token,
-        refresh_token: signUpData.session.refresh_token,
-      },
+      message:
+        'Check your email to verify your account, then sign in with your password.',
     })
   }
 

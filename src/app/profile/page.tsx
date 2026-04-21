@@ -7,6 +7,10 @@ import { BarChart3, Clock, User, Zap } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { clearPromptPerfectLocalAuth } from '@/lib/client/ppUserSync';
 import {
+  NAV_PROFILE_UPDATED_EVENT,
+  writeNavProfileCache,
+} from '@/lib/client/navProfileCache';
+import {
   fetchProfileFromApi,
   updateUserProfile,
   type UserProfile,
@@ -88,6 +92,10 @@ export default function ProfilePage() {
     setDisplayName(result.profile.display_name || '');
     setAvatarUrl(result.profile.avatar_url || '');
     setStats(result.stats);
+    writeNavProfileCache(result.profile.id, {
+      avatarUrl: result.profile.avatar_url ?? null,
+      displayName: result.profile.display_name ?? null,
+    });
     setLoading(false);
   }, [supabase]);
 
@@ -123,6 +131,21 @@ export default function ProfilePage() {
         setProfile(next);
         setDisplayName(next.display_name || '');
         setAvatarUrl(next.avatar_url || '');
+        writeNavProfileCache(next.id, {
+          avatarUrl: next.avatar_url ?? null,
+          displayName: next.display_name ?? null,
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent(NAV_PROFILE_UPDATED_EVENT, {
+              detail: {
+                userId: next.id,
+                avatar_url: next.avatar_url,
+                display_name: next.display_name,
+              },
+            }),
+          );
+        }
       }
       setEditing(false);
     } finally {

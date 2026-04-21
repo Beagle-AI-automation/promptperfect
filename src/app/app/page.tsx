@@ -36,16 +36,22 @@ import {
   clearPromptPerfectLocalAuth,
   syncPpUserFromAuthSession,
 } from '@/lib/client/ppUserSync';
+import { readStatsBarCache } from '@/lib/client/statsBarCache';
+import { userFacingOptimizeError } from '@/lib/optimizeUserError';
+import {
+  CHANGES_DELIMITER,
+  EXPLANATION_DELIMITER,
+  stripPromptScoreMarkers,
+} from '@/lib/delimiter';
+import { UserAccountMenu } from '@/components/UserAccountMenu';
 
 const STORAGE_KEY = 'promptperfect:apikey';
-const EXPLANATION_DELIMITER = '---EXPLANATION---';
-const CHANGES_DELIMITER = '---CHANGES---';
-const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
 
 function getOptimizedPromptText(fullText: string): string {
   const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
-  const beforeExplanation = explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
-  return beforeExplanation.replace(SCORE_PATTERN, '').trim();
+  const beforeExplanation =
+    explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
+  return stripPromptScoreMarkers(beforeExplanation);
 }
 
 function generateSessionId(): string {
@@ -67,6 +73,24 @@ function loadApiKey(provider: Provider): string {
   } catch {
     return '';
   }
+}
+
+const FEEDBACK_MODES: readonly OptimizationMode[] = [
+  'better',
+  'specific',
+  'cot',
+  'developer',
+  'research',
+  'beginner',
+  'product',
+  'marketing',
+] as const;
+
+function modeFromHistoryRow(mode: string): OptimizationMode {
+  const m = mode.trim().toLowerCase();
+  return (FEEDBACK_MODES as readonly string[]).includes(m)
+    ? (m as OptimizationMode)
+    : 'better';
 }
 
 interface PPUser {
@@ -109,6 +133,13 @@ export default function AppPage() {
   const userRef = useRef<PPUser | null>(null);
   const selectedHistoryItemRef = useRef<OptimizationHistoryItem | null>(null);
   const historyIdRef = useRef<string | null>(null);
+  /** Last successful /api/stats thumb counts — used to detect when server reflects new feedback. */
+  const lastServerThumbsRef = useRef({ up: 0, down: 0 });
+  /** Baseline thumbs at feedback submit time; optimistic clears only after server totals change. */
+  const thumbFeedbackPendingRef = useRef<{
+    baselineUp: number;
+    baselineDown: number;
+  } | null>(null);
 
   const [syncCompletion, setSyncCompletion] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
@@ -120,18 +151,47 @@ export default function AppPage() {
     setMounted(true);
   }, []);
 
-  const clearThumbOptimistic = useCallback(() => {
-    setThumbOptimistic({ up: 0, down: 0 });
-  }, []);
+  const handleStatsThumbsSynced = useCallback(
+    (payload: { thumbsUp: number; thumbsDown: number }) => {
+      const nu = Number(payload.thumbsUp);
+      const nd = Number(payload.thumbsDown);
+      const up = Number.isFinite(nu) ? nu : 0;
+      const down = Number.isFinite(nd) ? nd : 0;
+
+      const pending = thumbFeedbackPendingRef.current;
+      if (pending) {
+        const bu = Number(pending.baselineUp);
+        const bd = Number(pending.baselineDown);
+        const baseUp = Number.isFinite(bu) ? bu : 0;
+        const baseDown = Number.isFinite(bd) ? bd : 0;
+        /** Only drop optimistic overlay once totals actually move off the pre-submit baseline. */
+        const serverCaughtUp = up !== baseUp || down !== baseDown;
+        if (serverCaughtUp) {
+          thumbFeedbackPendingRef.current = null;
+          setThumbOptimistic({ up: 0, down: 0 });
+        }
+      }
+      lastServerThumbsRef.current = { up, down };
+    },
+    [],
+  );
 
   const handleFeedbackSubmitted = useCallback((direction: 'up' | 'down') => {
+    thumbFeedbackPendingRef.current = {
+      baselineUp: lastServerThumbsRef.current.up,
+      baselineDown: lastServerThumbsRef.current.down,
+    };
     setThumbOptimistic((o) => ({
       up: o.up + (direction === 'up' ? 1 : 0),
       down: o.down + (direction === 'down' ? 1 : 0),
     }));
-    window.setTimeout(() => {
-      setStatsRefresh((n) => n + 1);
-    }, 200);
+    const delaysMs = [450, 1100, 2600, 5200];
+    for (const ms of delaysMs) {
+      window.setTimeout(() => {
+        setStatsRefresh((n) => n + 1);
+      }, ms);
+    }
+    setHistoryRefresh((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -161,6 +221,19 @@ export default function AppPage() {
   useEffect(() => {
     historyIdRef.current = historyId;
   }, [historyId]);
+
+  /** Align feedback baseline with cached analytics when remounting /app after visiting other routes. */
+  useEffect(() => {
+    const uid = user?.id?.trim();
+    if (!uid) return;
+    const c = readStatsBarCache(uid);
+    if (c) {
+      lastServerThumbsRef.current = {
+        up: c.thumbsUp,
+        down: c.thumbsDown,
+      };
+    }
+  }, [user?.id]);
 
   const providerRef = useRef(provider);
   useEffect(() => {
@@ -302,8 +375,6 @@ export default function AppPage() {
       provider,
     },
     onFinish: async (prompt, completion) => {
-      setStatsRefresh((n) => n + 1);
-      setHistoryRefresh((n) => n + 1);
       const u = userRef.current;
       const authed = !!u;
       const histId = await saveToHistory({
@@ -317,6 +388,9 @@ export default function AppPage() {
         optimizeSessionId: optimizeSessionIdRef.current ?? undefined,
       });
       setHistoryId(histId);
+      /** Refresh stats/history after the row exists so thumbs aggregate includes this session. */
+      setStatsRefresh((n) => n + 1);
+      setHistoryRefresh((n) => n + 1);
     },
     fetch: async (input, init) => {
       const res = await fetch(input, init);
@@ -451,19 +525,13 @@ export default function AppPage() {
           };
         })
         .then(async (data) => {
-          const { optimizedText, explanation: expl, changes, rawText } = data;
-          const raw = typeof rawText === 'string' ? rawText : '';
-          const scoreMatch = raw.match(SCORE_PATTERN);
-          const scorePrefix = scoreMatch ? `${scoreMatch[0]}\n` : '';
+          const { optimizedText, explanation: expl, changes } = data;
           const full =
-            scorePrefix +
             (optimizedText ?? '') +
             (expl ? `\n${EXPLANATION_DELIMITER}\n${expl}` : '') +
             (changes ? `\n${CHANGES_DELIMITER}\n${changes}` : '');
           setSyncCompletion(full);
           setExplanation(expl || '');
-          setStatsRefresh((n) => n + 1);
-          setHistoryRefresh((n) => n + 1);
           const histId = await saveToHistory({
             prompt_original: trimmed,
             prompt_optimized: (optimizedText ?? '').trim(),
@@ -475,6 +543,8 @@ export default function AppPage() {
             optimizeSessionId: sid,
           });
           setHistoryId(histId);
+          setStatsRefresh((n) => n + 1);
+          setHistoryRefresh((n) => n + 1);
         })
         .catch((err) =>
           setSyncError(err instanceof Error ? err.message : 'Request failed'),
@@ -483,11 +553,45 @@ export default function AppPage() {
     }
   }, [user, inputText, selectedMode, provider, apiKey, hasApiKey, isGemini, complete]);
 
+  const resetComposerToNewPrompt = useCallback(() => {
+    setSelectedHistoryItem(null);
+    setHistoryId(null);
+    setSessionId(null);
+    setRunMeta(null);
+    optimizeSessionIdRef.current = null;
+    setSelectedMode('better');
+    setInputText('');
+    setExplanation('');
+    setInLibrary(null);
+    setSyncError(null);
+    setSyncLoading(false);
+    setUsageGateError(null);
+    if (isGemini) {
+      setStreamCompletion('');
+    } else {
+      setSyncCompletion('');
+    }
+  }, [isGemini, setStreamCompletion]);
+
   const handleHistorySelect = useCallback(
     (item: OptimizationHistoryItem) => {
+      if (selectedHistoryItemRef.current?.id === item.id) {
+        resetComposerToNewPrompt();
+        return;
+      }
+
       setSelectedHistoryItem(item);
-      setHistoryId(item.id); // Set the history ID so Share button appears
-      setSessionId(item.optimize_session_id?.trim() || null);
+      setHistoryId(item.id); // Share + Save + library status use history row id
+      /** Prefer per-run optimize id for logs; legacy rows use history id so feedback works without re-running Optimize. */
+      const feedbackSessionId =
+        item.optimize_session_id?.trim() || item.id.trim() || null;
+      setSessionId(feedbackSessionId);
+      setRunMeta({
+        mode: modeFromHistoryRow(item.mode),
+        provider,
+        inputLength: item.prompt_original.trim().length,
+      });
+      setSelectedMode(modeFromHistoryRow(item.mode));
       const full =
         item.prompt_optimized +
         (item.explanation.trim()
@@ -501,7 +605,7 @@ export default function AppPage() {
         setSyncCompletion(full);
       }
     },
-    [isGemini, setStreamCompletion],
+    [isGemini, provider, resetComposerToNewPrompt, setStreamCompletion],
   );
 
   const handleHistoryDeleted = useCallback((deletedId: string) => {
@@ -555,20 +659,11 @@ export default function AppPage() {
           <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
             {user ? (
               <>
-                <span className="hidden text-sm text-[#888] sm:inline">
-                  Hi, {user.name || user.email}
-                </span>
                 <Link
                   href="/library"
                   className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
                 >
                   Library
-                </Link>
-                <Link
-                  href="/profile"
-                  className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
-                >
-                  Profile
                 </Link>
                 <button
                   type="button"
@@ -578,13 +673,17 @@ export default function AppPage() {
                 >
                   ⚙️ Settings
                 </button>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
-                >
-                  Log out
-                </button>
+                <UserAccountMenu
+                  key={user.id}
+                  userId={user.id}
+                  fallbackDisplayName={
+                    user.name?.trim() ||
+                    user.email.split('@')[0] ||
+                    user.email ||
+                    'there'
+                  }
+                  onLogout={handleLogout}
+                />
               </>
             ) : (
               <>
@@ -617,8 +716,9 @@ export default function AppPage() {
           <div className="shrink-0 px-6 pt-5">
             <StatsBar
               refreshTrigger={statsRefresh}
+              cacheUserId={user.id}
               optimisticThumbs={thumbOptimistic}
-              onStatsFetched={clearThumbOptimistic}
+              onStatsFetched={handleStatsThumbsSynced}
             />
           </div>
         )}
@@ -661,7 +761,7 @@ export default function AppPage() {
                       provider={runMeta?.provider ?? provider}
                       inputLength={runMeta?.inputLength ?? inputText.trim().length}
                       outputLength={getOptimizedPromptText(completion).length}
-                      disabled={false}
+                      disabled={Boolean(user?.id && !historyId)}
                       onSubmitted={handleFeedbackSubmitted}
                     />
                   </div>
@@ -708,7 +808,7 @@ export default function AppPage() {
 
         {error && (
           <p className="shrink-0 px-6 pb-2 text-center text-sm text-red-400">
-            {error.message}
+            {userFacingOptimizeError(error)}
           </p>
         )}
 
@@ -745,6 +845,7 @@ export default function AppPage() {
             userId={user.id}
             onSelect={handleHistorySelect}
             onDeleted={handleHistoryDeleted}
+            onNewPrompt={resetComposerToNewPrompt}
             refreshTrigger={historyRefresh}
             selectedId={selectedHistoryItem?.id ?? null}
           />

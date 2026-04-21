@@ -4,9 +4,13 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import type { Provider } from "@/lib/types";
 
-/** Set `GEMINI_MODEL` in `.env` if the default is unavailable (e.g. `gemini-2.5-flash`). */
+/**
+ * Default to current GA Flash. Override with `GEMINI_MODEL` if needed.
+ * `gemini-2.0-flash` is deprecated in the Gemini API docs — prefer 2.5.
+ */
 const GEMINI_MODEL =
-  process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
+  process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+
 const OPENAI_MODEL = "gpt-4o-mini";
 const ANTHROPIC_MODEL = "claude-3-5-haiku-latest";
 

@@ -22,30 +22,6 @@ type PpUserRowPassword = {
   model: string | null
 }
 
-function looksLikeEmailNotConfirmedError(message: string | undefined): boolean {
-  if (!message) return false
-  return /email not confirmed|address not confirmed|confirm your email|not verified|verification required|email address is not confirmed/i.test(
-    message,
-  )
-}
-
-/** GoTrue returns `email_notconfirmed` / message varies by version and locale. */
-function shouldHealUnconfirmedLogin(authError: {
-  message?: string
-  code?: string
-} | null): boolean {
-  if (!authError) return false
-  const c = authError.code?.toLowerCase()
-  if (
-    c === 'email_not_confirmed' ||
-    c === 'email_notconfirmed' ||
-    (typeof c === 'string' && c.includes('email') && c.includes('confirm'))
-  ) {
-    return true
-  }
-  return looksLikeEmailNotConfirmedError(authError.message)
-}
-
 /** Shared success path after `signInWithPassword` returns a session. */
 async function jsonLoginSuccess(
   admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
@@ -54,6 +30,18 @@ async function jsonLoginSuccess(
   emailRawTrim: string,
 ) {
   const authId = authData.user.id
+
+  if (!authData.user.email_confirmed_at) {
+    return NextResponse.json(
+      {
+        error:
+          'Please confirm your email before signing in. Check your inbox for the message from PromptPerfect.',
+        code: 'EMAIL_NOT_CONFIRMED',
+        hint: 'Use “Resend confirmation email” below if you did not receive it (check spam).',
+      },
+      { status: 403 },
+    )
+  }
 
   let { data: row } = await admin
     .from('pp_users')
@@ -217,6 +205,28 @@ export async function POST(request: Request) {
         password,
       })
 
+    if (authError) {
+      const ec = authError.code?.toLowerCase() ?? ''
+      const em = authError.message?.toLowerCase() ?? ''
+      if (
+        ec === 'email_not_confirmed' ||
+        ec === 'email_notconfirmed' ||
+        (em.includes('email') && em.includes('confirm')) ||
+        em.includes('email not confirmed')
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Please confirm your email before signing in. Check your inbox for the link we sent.',
+            code: 'EMAIL_NOT_CONFIRMED',
+            hint:
+              'If you did not receive it, use “Resend confirmation email” below after entering your email.',
+          },
+          { status: 403 },
+        )
+      }
+    }
+
     if (!authError && authData.session && authData.user) {
       const admin = getSupabaseAdminClient()
       if (!admin) {
@@ -261,46 +271,11 @@ export async function POST(request: Request) {
 
     // Password lives in Supabase Auth only — never use the legacy SHA-256 branch here.
     if (user.password_hash === 'supabase_auth') {
-      // Legacy accounts were created with email_confirm off; confirm server-side once and retry.
-      if (authError && shouldHealUnconfirmedLogin(authError)) {
-        const { data: gu, error: getAuthErr } =
-          await admin.auth.admin.getUserById(user.id)
-        const authUser = gu?.user
-        if (
-          !getAuthErr &&
-          authUser &&
-          !authUser.email_confirmed_at
-        ) {
-          const { error: confirmErr } =
-            await admin.auth.admin.updateUserById(authUser.id, {
-              email_confirm: true,
-            })
-          if (!confirmErr) {
-            const retry = await supabaseAuth.auth.signInWithPassword({
-              email,
-              password,
-            })
-            if (
-              !retry.error &&
-              retry.data.session &&
-              retry.data.user
-            ) {
-              return jsonLoginSuccess(
-                admin,
-                { session: retry.data.session, user: retry.data.user },
-                email,
-                emailRawTrim,
-              )
-            }
-          }
-        }
-      }
-
       const msg =
         authError?.message?.trim() || 'Invalid email or password'
       const hint =
         /confirm|verified|verification/i.test(msg)
-          ? 'Confirm the email Supabase sent, or use Forgot password. Ask your admin to mark the user as confirmed if needed.'
+          ? 'Confirm the email PromptPerfect sent, then try again — or use Forgot password.'
           : undefined
       return NextResponse.json(
         { error: msg, ...(hint ? { hint } : {}) },

@@ -10,6 +10,23 @@
  * NEXT_PUBLIC_SITE_URL=http://localhost:3000 explicitly.
  */
 
+/**
+ * Origin for password-reset links on the server. Prefers the incoming request
+ * host so local dev works when `NEXT_PUBLIC_SITE_URL` points at production.
+ */
+export function getPasswordResetOrigin(request: Request): string {
+  const host =
+    request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+    request.headers.get('host')?.split(',')[0]?.trim();
+  if (host) {
+    const proto =
+      request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+      'http';
+    return `${proto}://${host}`;
+  }
+  return getSiteOriginForAuth(request);
+}
+
 /** Public site origin for server-side auth redirects (signup email, etc.). */
 export function getSiteOriginForAuth(request: Request): string {
   const env = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, '');
@@ -40,16 +57,17 @@ export function getEmailConfirmationRedirectUrl(request: Request): string {
 }
 
 /**
- * OAuth redirect after Google (or other provider) sign-in — browser only.
- * Prefer NEXT_PUBLIC_SITE_URL when set (preview/staging domains).
+ * OAuth redirect after Google (or other provider) sign-in.
+ * In the browser, always use the **current tab origin** so local dev / Vercel
+ * previews match Supabase allowlisted URLs. Using NEXT_PUBLIC_SITE_URL here
+ * breaks OAuth when that env points at production but you are on localhost.
  */
 export function getOAuthCallbackUrl(): string {
-  const envBase = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, '');
-  if (typeof window === 'undefined') {
-    return envBase ? `${envBase}/auth/callback` : '/auth/callback';
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/$/, '')}/auth/callback`;
   }
-  const origin = envBase || window.location.origin;
-  return `${origin}/auth/callback`;
+  const envBase = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, '');
+  return envBase ? `${envBase}/auth/callback` : '/auth/callback';
 }
 
 /**
@@ -57,10 +75,9 @@ export function getOAuthCallbackUrl(): string {
  * Same origin rules as OAuth: allowlist `/auth/reset` in Supabase.
  */
 export function getPasswordResetRedirectUrl(): string {
-  const envBase = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, '');
-  if (typeof window === 'undefined') {
-    return envBase ? `${envBase}/auth/reset` : '/auth/reset';
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/$/, '')}/auth/reset`;
   }
-  const origin = envBase || window.location.origin;
-  return `${origin}/auth/reset`;
+  const envBase = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, '');
+  return envBase ? `${envBase}/auth/reset` : '/auth/reset';
 }

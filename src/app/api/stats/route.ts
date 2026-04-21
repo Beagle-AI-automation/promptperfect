@@ -5,7 +5,7 @@ import { resolveIdentity } from '@/lib/server/supabaseRequestIdentity';
 /**
  * Analytics for the signed-in user only (via `resolveIdentity`).
  * Volume/mode/provider from `pp_optimization_history`; thumbs from `optimization_logs`
- * (by `user_id` when migrated, plus legacy link via `optimize_session_id`).
+ * whose `session_id` still matches a row in that history (`id` or `optimize_session_id`).
  */
 export async function GET(request: Request) {
   const identity = await resolveIdentity(request);
@@ -20,8 +20,9 @@ export async function GET(request: Request) {
     byProvider: {} as Record<string, number>,
   };
 
+  /** Lets the client distinguish “not signed in yet / no identity” from a real account with zero activity. */
   if (!supabase || !identity?.userId) {
-    return Response.json(empty);
+    return Response.json({ ...empty, authenticated: false });
   }
 
   try {
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
         avgScore: fb.avgScore,
         byMode,
         byProvider,
+        authenticated: true,
       });
     }
 
@@ -114,6 +116,7 @@ export async function GET(request: Request) {
       avgScore: fb.avgScore,
       byMode,
       byProvider,
+      authenticated: true,
     });
   } catch (err) {
     console.error('[Stats API] Unexpected error:', err);

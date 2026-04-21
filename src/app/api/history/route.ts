@@ -248,11 +248,28 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const { data: hist, error: histErr } = await db
+  let histQuery = await db
     .from('pp_optimization_history')
-    .select('id,user_id,prompt_original,prompt_optimized')
+    .select(
+      'id,user_id,prompt_original,prompt_optimized,optimize_session_id',
+    )
     .eq('id', id)
     .maybeSingle();
+
+  if (
+    histQuery.error &&
+    /optimize_session_id|schema cache|could not find/i.test(
+      histQuery.error.message,
+    )
+  ) {
+    histQuery = await db
+      .from('pp_optimization_history')
+      .select('id,user_id,prompt_original,prompt_optimized')
+      .eq('id', id)
+      .maybeSingle();
+  }
+
+  const { data: hist, error: histErr } = histQuery;
 
   if (histErr) {
     return NextResponse.json(
@@ -265,6 +282,28 @@ export async function DELETE(request: Request) {
   }
   if (hist.user_id !== identity.userId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  /** Drop feedback rows so aggregate thumbs match remaining history (service role; RLS has no anon delete on logs). */
+  const admin = getSupabaseAdminClient();
+  if (admin) {
+    const sessionKeys = new Set<string>([id]);
+    const histRow = hist as { optimize_session_id?: string | null };
+    const os =
+      typeof histRow.optimize_session_id === 'string'
+        ? histRow.optimize_session_id.trim()
+        : '';
+    if (os) sessionKeys.add(os);
+    const { error: logDelErr } = await admin
+      .from('optimization_logs')
+      .delete()
+      .in('session_id', [...sessionKeys]);
+    if (logDelErr) {
+      return NextResponse.json(
+        { error: logDelErr.message, code: 'FEEDBACK_LOG_DELETE_ERROR' },
+        { status: 500 },
+      );
+    }
   }
 
   const delByLink = await db

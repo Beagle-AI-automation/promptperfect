@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
@@ -34,6 +34,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingEmailConfirmation, setPendingEmailConfirmation] =
+    useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    const fromOAuth = p.get('error')?.trim();
+    if (fromOAuth) {
+      setError(decodeURIComponent(fromOAuth));
+    }
+  }, []);
 
   const passwordValidation = validatePassword(password);
   const showPasswordHints = mode === 'signup' && password.length > 0;
@@ -44,8 +55,35 @@ export default function LoginPage() {
       return;
     }
     setError('');
+    setPendingEmailConfirmation(false);
     const { error: oAuthError } = await signInWithGoogle(supabase);
     if (oAuthError) setError(oAuthError.message);
+  }
+
+  async function handleResendConfirmation() {
+    if (!supabase || !email.trim()) {
+      setError('Enter the email you signed up with above.');
+      return;
+    }
+    setError('');
+    const emailRedirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
+    const { error: resendErr } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      ...(emailRedirectTo
+        ? { options: { emailRedirectTo } }
+        : {}),
+    });
+    if (resendErr) {
+      setError(resendErr.message);
+      return;
+    }
+    setError(
+      'We sent another confirmation link. Check your inbox and spam folder.',
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,11 +161,28 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await res.json();
+      const payload = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Invalid email or password');
+        const errBody = payload as {
+          error?: string;
+          code?: string;
+          hint?: string;
+        };
+        setPendingEmailConfirmation(errBody.code === 'EMAIL_NOT_CONFIRMED');
+        setError(errBody.error || 'Invalid email or password');
         return;
       }
+      setPendingEmailConfirmation(false);
+      const data = payload as {
+        session?: { access_token: string; refresh_token: string };
+        user: {
+          id: string;
+          name: string | null;
+          email: string;
+          provider: string;
+          model: string;
+        };
+      };
       if (
         supabase &&
         data.session &&
@@ -139,24 +194,17 @@ export default function LoginPage() {
           refresh_token: data.session.refresh_token,
         });
       }
-      const user = data.user as {
-        id: string;
-        name: string | null;
-        email: string;
-        provider: string;
-        model: string;
-      };
       localStorage.setItem(
         'pp_user',
         JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          provider: user.provider,
-          model: user.model,
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          provider: data.user.provider,
+          model: data.user.model,
         })
       );
-      await claimGuestHistoryAfterAuth(user.id);
+      await claimGuestHistoryAfterAuth(data.user.id);
       router.push('/app');
     } catch {
       setError('Something went wrong');
@@ -174,6 +222,7 @@ export default function LoginPage() {
             setMode('signin');
             setError('');
             setVerificationSent(false);
+            setPendingEmailConfirmation(false);
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signin'
@@ -189,6 +238,7 @@ export default function LoginPage() {
             setMode('signup');
             setError('');
             setVerificationSent(false);
+            setPendingEmailConfirmation(false);
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signup'
@@ -327,6 +377,21 @@ export default function LoginPage() {
           <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}
           </p>
+        )}
+        {pendingEmailConfirmation && mode === 'signin' && (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100/95">
+            <p className="mb-2">
+              You must confirm your email before signing in. Open the link in
+              the message from PromptPerfect (check spam).
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleResendConfirmation()}
+              className="text-sm font-medium text-[#4552FF] underline-offset-2 hover:underline"
+            >
+              Resend confirmation email
+            </button>
+          </div>
         )}
         <button
           type="submit"
