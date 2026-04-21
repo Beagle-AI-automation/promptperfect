@@ -26,6 +26,7 @@
     "@supabase/supabase-js": "^2.97.0",
     "ai": "^6.0.85",
     "dotenv": "^17.3.1",
+    "enhanced-resolve": "^5.18.3",
     "lucide-react": "^0.563.0",
     "nanoid": "^5.1.7",
     "next": "16.1.6",
