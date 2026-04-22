@@ -11,7 +11,8 @@
     const tag = el.tagName.toLowerCase();
     const type = (el.type || '').toLowerCase();
     if (tag === 'textarea') return true;
-    if (tag === 'input' && (type === 'text' || type === 'search' || type === 'email' || type === 'url')) return true;
+    if (tag === 'input' && (type === 'text' || type === 'search' || type === 'email' || type === 'url'))
+      return true;
     if (el.isContentEditable) return true;
     return false;
   }
@@ -42,10 +43,13 @@
           el.textContent = text;
         }
       }
-      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+      el.dispatchEvent(
+        new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }),
+      );
       return;
     }
-    var proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    var proto =
+      el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     var descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
     if (descriptor && descriptor.set) {
       var nativeSetter = descriptor.set;
@@ -67,15 +71,52 @@
     };
   }
 
-  function showButtonError(btn, message) {
-    btn.textContent = 'Error';
-    btn.title = message || 'Something went wrong';
-    setTimeout(function () {
-      if (btn && btn.textContent === 'Error') {
-        btn.textContent = '✨ Optimize';
-        btn.title = '';
+  function showNotification(message, type) {
+    const toast = document.createElement('div');
+    toast.className = 'pp-toast pp-toast--' + (type === 'success' ? 'success' : 'error');
+    toast.setAttribute('role', 'status');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('pp-toast--visible'));
+    setTimeout(() => {
+      toast.classList.remove('pp-toast--visible');
+      setTimeout(() => toast.remove(), 320);
+    }, 3200);
+  }
+
+  function setButtonOptimizing(btn) {
+    btn.disabled = true;
+    btn.innerHTML =
+      '<span class="pp-spinner" aria-hidden="true"></span><span class="pp-btn-label">Optimizing</span>';
+    btn.setAttribute('aria-busy', 'true');
+  }
+
+  function setButtonReady(btn) {
+    btn.disabled = false;
+    btn.innerHTML =
+      '<span class="pp-btn-label" aria-hidden="false">✨ Optimize</span>';
+    btn.removeAttribute('aria-busy');
+  }
+
+  function flashButtonSuccess(btn) {
+    btn.classList.add('pp-success-flash');
+    setTimeout(() => btn.classList.remove('pp-success-flash'), 900);
+  }
+
+  function sendOptimizeMessage(text) {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'OPTIMIZE', text }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error('Extension error'));
       }
-    }, 3000);
+    });
   }
 
   function createButton() {
@@ -85,7 +126,7 @@
     btn.id = BUTTON_ID;
     btn.type = 'button';
     btn.className = 'pp-optimize-button';
-    btn.textContent = '✨ Optimize';
+    btn.innerHTML = '<span class="pp-btn-label">✨ Optimize</span>';
     btn.setAttribute('aria-label', 'Optimize prompt with PromptPerfect');
     return btn;
   }
@@ -121,30 +162,44 @@
       window.removeEventListener('resize', scrollOrResize);
     };
 
-    btn.onclick = (e) => {
+    btn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const target = currentTarget;
       if (!target) return;
       const text = getTextFromElement(target);
       if (!text) return;
-      btn.disabled = true;
-      btn.textContent = '…';
-      chrome.runtime.sendMessage({ type: 'OPTIMIZE', text }, (response) => {
-        btn.disabled = false;
-        btn.textContent = '✨ Optimize';
-        if (chrome.runtime.lastError) {
-          showButtonError(btn, chrome.runtime.lastError.message);
+
+      setButtonOptimizing(btn);
+
+      try {
+        const response = await sendOptimizeMessage(text.trim());
+
+        if (response && response.error) {
+          showNotification('Optimization failed: ' + response.error, 'error');
           return;
         }
-        if (response && response.optimizedText != null) {
+
+        if (response && response.optimizedText != null && response.optimizedText !== '') {
           setElementValue(target, response.optimizedText);
-        } else if (response && response.error) {
-          showButtonError(btn, response.error);
+          flashButtonSuccess(btn);
+          showNotification('Prompt optimized!', 'success');
         } else {
-          showButtonError(btn, 'No response from API');
+          showNotification('Optimization failed: empty response', 'error');
         }
-      });
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Could not reach PromptPerfect API';
+        if (/Could not establish|Receiving end|Extension context/i.test(msg)) {
+          showNotification('Could not reach PromptPerfect API. Reload the extension.', 'error');
+        } else {
+          showNotification('Could not reach PromptPerfect API', 'error');
+        }
+      } finally {
+        setButtonReady(btn);
+      }
     };
 
     btn.onmouseenter = () => clearTimeout(hideTimeout);
@@ -168,18 +223,26 @@
     hideTimeout = setTimeout(hideButton, 200);
   }
 
-  document.addEventListener('focusin', (e) => {
-    const el = e.target;
-    if (isTextInput(el)) showButton(el);
-  }, true);
+  document.addEventListener(
+    'focusin',
+    (e) => {
+      const el = e.target;
+      if (isTextInput(el)) showButton(el);
+    },
+    true,
+  );
 
-  document.addEventListener('focusout', (e) => {
-    const el = e.target;
-    const btn = document.getElementById(BUTTON_ID);
-    const related = e.relatedTarget;
-    if (btn && related && btn.contains(related)) return;
-    if (el && isTextInput(el)) scheduleHide();
-  }, true);
+  document.addEventListener(
+    'focusout',
+    (e) => {
+      const el = e.target;
+      const btn = document.getElementById(BUTTON_ID);
+      const related = e.relatedTarget;
+      if (btn && related && btn.contains(related)) return;
+      if (el && isTextInput(el)) scheduleHide();
+    },
+    true,
+  );
 
   observer = new MutationObserver(() => {
     if (!currentTarget) return;

@@ -1,115 +1,237 @@
-import { getSupabaseClient } from '@/lib/client/supabase';
+'use client';
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
+import { clearGuestLocalStorage, getStoredGuestId } from '@/lib/guest';
 
 export interface UserProfile {
   id: string;
-  email: string | null;
-  display_name: string;
+  email: string;
+  display_name: string | null;
   avatar_url: string | null;
   optimization_count: number;
-  favorite_mode: string | null;
   created_at: string;
 }
 
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
-
-  const { data, error } = await client
-    .from('pp_user_profiles')
-    .select('*')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return data as UserProfile;
+export interface UserStats {
+  total: number;
+  favoriteMode: string | null;
+  favoriteProvider: string | null;
+  /** From `optimization_logs` (per-session feedback), same source as app analytics. */
+  thumbsUp: number;
+  thumbsDown: number;
 }
 
-export async function ensureUserProfile(user: {
-  id: string;
-  email?: string | null;
-  name?: string | null;
-}): Promise<UserProfile | null> {
-  const existing = await getUserProfile(user.id);
-  if (existing) return existing;
+export type ProfileLoadError = {
+  status: number;
+  error: string;
+  hint?: string;
+  code?: string;
+};
 
-  const client = getSupabaseClient();
-  if (!client) return null;
+export type ProfileLoadResult =
+  | { ok: true; profile: UserProfile; stats: UserStats }
+  | { ok: false; detail: ProfileLoadError };
 
-  const display_name =
-    (typeof user.name === 'string' && user.name.trim()) ||
-    (user.email ? user.email.split('@')[0] : 'User');
+function browserClient(): SupabaseClient | null {
+  return createSupabaseBrowserClient();
+}
 
-  const { data, error } = await client
-    .from('pp_user_profiles')
-    .upsert(
-      {
-        id: user.id,
-        email: user.email ?? '',
-        display_name,
-        avatar_url: null,
+/**
+ * Load profile + dashboard stats in one request (preferred on `/profile`).
+ * Uses `/api/profile` so app login (`pp_user` headers + service role) works with RLS.
+ */
+export async function fetchProfileFromApi(
+  supabase: SupabaseClient | null = browserClient(),
+): Promise<ProfileLoadResult> {
+  if (!supabase) {
+    return {
+      ok: false,
+      detail: {
+        status: 503,
+        error: 'Supabase is not configured',
+        code: 'NO_CLIENT',
       },
-      { onConflict: 'id' },
-    )
-    .select('*')
-    .single();
+    };
+  }
 
-  if (error || !data) return null;
-  return data as UserProfile;
+  const headers = await getPromptPerfectAuthHeaders(supabase);
+  if (!headers) {
+    return {
+      ok: false,
+      detail: {
+        status: 401,
+        error: 'Not signed in',
+        code: 'NO_AUTH_HEADERS',
+      },
+    };
+  }
+
+  const res = await fetch('/api/profile', { headers });
+  const payload = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    hint?: string;
+    code?: string;
+    profile?: UserProfile;
+    stats?: UserStats;
+  };
+
+  if (!res.ok || !payload.profile) {
+    return {
+      ok: false,
+      detail: {
+        status: res.status,
+        error: payload.error || `Request failed (${res.status})`,
+        hint: payload.hint,
+        code: payload.code,
+      },
+    };
+  }
+
+  const stats: UserStats = payload.stats ?? {
+    total: payload.profile.optimization_count ?? 0,
+    favoriteMode: null,
+    favoriteProvider: null,
+    thumbsUp: 0,
+    thumbsDown: 0,
+  };
+
+  return { ok: true, profile: payload.profile, stats };
+}
+
+/** @param userId — when set, returns null if the API profile id does not match */
+export async function getUserProfile(
+  userId: string,
+  supabase: SupabaseClient | null = browserClient(),
+): Promise<UserProfile | null> {
+  const r = await fetchProfileFromApi(supabase);
+  if (!r.ok) return null;
+  if (userId && r.profile.id !== userId) return null;
+  return r.profile;
+}
+
+/** @param userId — unused for API path; kept for API compatibility with PP-504 */
+export async function getUserStats(
+  userId: string,
+  supabase: SupabaseClient | null = browserClient(),
+): Promise<UserStats> {
+  const r = await fetchProfileFromApi(supabase);
+  if (!r.ok) {
+    return {
+      total: 0,
+      favoriteMode: null,
+      favoriteProvider: null,
+      thumbsUp: 0,
+      thumbsDown: 0,
+    };
+  }
+  if (userId && r.profile.id !== userId) {
+    return {
+      total: 0,
+      favoriteMode: null,
+      favoriteProvider: null,
+      thumbsUp: 0,
+      thumbsDown: 0,
+    };
+  }
+  return r.stats;
 }
 
 export async function updateUserProfile(
   userId: string,
   updates: { display_name?: string; avatar_url?: string | null },
-): Promise<{ error: Error | null }> {
-  const client = getSupabaseClient();
-  if (!client) return { error: new Error('Supabase is not configured') };
+  supabase: SupabaseClient | null = browserClient(),
+): Promise<{ error: Error | null; profile?: UserProfile }> {
+  const client = supabase ?? browserClient();
+  if (!client) {
+    return { error: new Error('Supabase is not configured') };
+  }
 
-  const { error } = await client
-    .from('pp_user_profiles')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', userId);
+  const headers = await getPromptPerfectAuthHeaders(client);
+  if (!headers) {
+    return { error: new Error('Not signed in') };
+  }
 
-  return { error: error ? new Error(error.message) : null };
+  const body: Record<string, string | null> = {};
+  if (updates.display_name !== undefined) {
+    body.display_name = updates.display_name;
+  }
+  if (updates.avatar_url !== undefined) {
+    body.avatar_url = updates.avatar_url;
+  }
+
+  const res = await fetch('/api/profile', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  const payload = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    profile?: UserProfile;
+  };
+
+  if (!res.ok) {
+    return {
+      error: new Error(payload.error || 'Update failed'),
+    };
+  }
+
+  if (payload.profile && payload.profile.id !== userId) {
+    return { error: new Error('Profile mismatch') };
+  }
+
+  return { error: null, profile: payload.profile };
 }
 
-export async function getUserStats(userId: string): Promise<{
-  total: number;
-  favoriteMode: string | null;
-  favoriteProvider: string | null;
-}> {
-  const client = getSupabaseClient();
-  if (!client) {
-    return { total: 0, favoriteMode: null, favoriteProvider: null };
+/**
+ * Guest → user: moves `pp_optimization_history` rows from `guestId` (`pp_guest_id`)
+ * into the signed-in session and attaches `user_id`. Clears `pp_guest_id` / `pp_guest_count` on success.
+ */
+export async function migrateGuestHistory(
+  userId: string,
+  guestId: string,
+): Promise<{ error: Error | null }> {
+  if (!guestId.startsWith('guest_')) {
+    return { error: new Error('Invalid guest id') };
   }
 
-  const { data: optimizations, error } = await client
-    .from('pp_optimization_history')
-    .select('mode, provider, created_at')
-    .eq('user_id', userId);
-
-  if (error || !optimizations?.length) {
-    return { total: 0, favoriteMode: null, favoriteProvider: null };
+  const targetSessionId = getOrCreateSessionId();
+  if (!targetSessionId) {
+    return { error: new Error('No session id') };
   }
 
-  const modeCounts: Record<string, number> = {};
-  const providerCounts: Record<string, number> = {};
-
-  for (const opt of optimizations) {
-    const mode = typeof opt.mode === 'string' ? opt.mode : '';
-    if (mode) modeCounts[mode] = (modeCounts[mode] || 0) + 1;
-    if (typeof opt.provider === 'string' && opt.provider) {
-      providerCounts[opt.provider] = (providerCounts[opt.provider] || 0) + 1;
+  try {
+    const res = await fetch('/api/auth/claim-guest-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guestId, targetSessionId, userId }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      return {
+        error: new Error(body.error || 'Migration failed'),
+      };
     }
+    clearGuestLocalStorage();
+    return { error: null };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e : new Error('Migration failed'),
+    };
   }
+}
 
-  const favoriteMode =
-    Object.entries(modeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  const favoriteProvider =
-    Object.entries(providerCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-
-  return {
-    total: optimizations.length,
-    favoriteMode,
-    favoriteProvider,
-  };
+/** Same as `migrateGuestHistory(userId, getStoredGuestId())` when `pp_guest_id` exists. */
+export async function migrateGuestHistoryIfNeeded(
+  userId: string,
+): Promise<{ error: Error | null; ran: boolean }> {
+  const guestId = getStoredGuestId();
+  if (!guestId.startsWith('guest_')) {
+    return { error: null, ran: false };
+  }
+  const { error } = await migrateGuestHistory(userId, guestId);
+  return { error, ran: true };
 }

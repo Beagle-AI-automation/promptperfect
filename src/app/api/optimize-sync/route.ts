@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
 import { splitOptimizedOutput } from '@/lib/delimiter';
 import { normalizeModeForDb, parsePromptScore } from '@/lib/optimization-logs';
+import { userFacingOptimizeError } from '@/lib/optimizeUserError';
 import { createProvider } from '@/lib/providers';
 import { getSystemPrompt } from '@/lib/prompts';
 import type { OptimizationMode, OptimizeRequest, Provider } from '@/lib/types';
@@ -13,8 +14,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
-
-const SCORE_PATTERN = /---SCORE---\d{1,3}---/g;
 
 const MODES: OptimizationMode[] = [
   'better',
@@ -74,7 +73,7 @@ export async function POST(req: NextRequest) {
       providerConfig = createProvider(provider, apiKey);
     } catch (e) {
       return Response.json(
-        { error: (e as Error).message },
+        { error: userFacingOptimizeError(e) },
         { status: 400, headers: corsHeaders },
       );
     }
@@ -87,12 +86,13 @@ export async function POST(req: NextRequest) {
         model,
         system,
         prompt: promptRaw,
+        maxRetries: 1,
       });
 
       const rawText = result.text ?? '';
       const { optimizedText: rawOptimized, explanation, changes } =
         splitOptimizedOutput(rawText);
-      const optimizedText = rawOptimized.replace(SCORE_PATTERN, '').trim();
+      const optimizedText = rawOptimized.trim();
       const promptScore = parsePromptScore(rawText);
 
       const sessionId =
@@ -101,9 +101,10 @@ export async function POST(req: NextRequest) {
         body.version === 'v1' || body.version === 'v2' ? body.version : 'v1';
 
       if (sessionId) {
-        const supabase = getSupabaseAdminClient();
-        if (supabase) {
-          void supabase.from('optimization_logs').insert({
+        const admin = getSupabaseAdminClient();
+        const db = admin;
+        if (db) {
+          void db.from('optimization_logs').insert({
             session_id: sessionId,
             mode: normalizeModeForDb(mode),
             version,
@@ -129,8 +130,10 @@ export async function POST(req: NextRequest) {
         { headers: corsHeaders },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to optimize prompt';
-      return Response.json({ error: message }, { status: 500, headers: corsHeaders });
+      return Response.json(
+        { error: userFacingOptimizeError(err) },
+        { status: 500, headers: corsHeaders },
+      );
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid request';

@@ -2,14 +2,13 @@ import { streamText } from 'ai';
 
 import { splitOptimizedOutput } from '@/lib/delimiter';
 import { normalizeModeForDb, parsePromptScore } from '@/lib/optimization-logs';
+import { userFacingOptimizeError } from '@/lib/optimizeUserError';
 import { createProvider } from '@/lib/providers';
 import { getSystemPrompt } from '@/lib/prompts';
 import type { OptimizeMode } from '@/lib/prompts';
 import { getSupabaseClient } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-
-const SCORE_PATTERN = /---SCORE---\d{1,3}---/g;
 
 export async function POST(request: Request) {
   try {
@@ -39,18 +38,34 @@ export async function POST(request: Request) {
     const modeStr = typeof mode === 'string' ? mode : 'better';
     const dbMode = normalizeModeForDb(modeStr);
 
-    const { model, modelId } = createProvider('gemini', apiKey ?? undefined);
+    let model;
+    let modelId: string;
+    try {
+      const resolved = createProvider(
+        'gemini',
+        typeof apiKey === 'string' ? apiKey : undefined,
+      );
+      model = resolved.model;
+      modelId = resolved.modelId;
+    } catch (e) {
+      return Response.json(
+        { error: userFacingOptimizeError(e) },
+        { status: 400 },
+      );
+    }
+
     const systemPrompt = getSystemPrompt(modeStr);
 
     const result = streamText({
       model,
       system: systemPrompt,
       prompt: promptRaw,
+      maxRetries: 1,
       onFinish: async ({ text }) => {
         try {
           const { optimizedText: rawOpt, explanation, changes } =
             splitOptimizedOutput(text);
-          const optimizedText = rawOpt.replace(SCORE_PATTERN, '').trim();
+          const optimizedText = rawOpt.trim();
           const promptScore = parsePromptScore(text);
 
           if (sessionId) {
@@ -78,7 +93,9 @@ export async function POST(request: Request) {
     return result.toTextStreamResponse();
   } catch (err) {
     console.error('[api/optimize]', err);
-    const message = err instanceof Error ? err.message : 'Optimization failed';
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json(
+      { error: userFacingOptimizeError(err) },
+      { status: 500 },
+    );
   }
 }

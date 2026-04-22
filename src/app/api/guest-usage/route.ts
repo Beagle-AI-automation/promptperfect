@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
+import { GUEST_LIMIT } from '@/lib/guest'
 import { getSupabaseClient } from '@/lib/supabase'
-
-const GUEST_LIMIT = 5
 
 export async function POST(request: Request) {
   const supabase = getSupabaseClient()

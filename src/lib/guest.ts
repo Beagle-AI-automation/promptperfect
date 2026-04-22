@@ -1,8 +1,11 @@
 /** Max free optimizations for anonymous guests before signup is required. */
 export const GUEST_TOKEN_LIMIT = 5;
+/** Alias for UI and API routes that imported `GUEST_LIMIT` historically. */
+export const GUEST_LIMIT = GUEST_TOKEN_LIMIT;
 
 const GUEST_ID_KEY = 'pp_guest_id';
 const GUEST_TOKENS_KEY = 'pp_guest_tokens_used';
+const LEGACY_GUEST_COUNT_KEY = 'pp_guest_count';
 
 function getStorage(storage?: Storage): Storage | null {
   if (storage) return storage;
@@ -27,10 +30,21 @@ export function getGuestId(storage?: Storage): string {
   return id;
 }
 
+/** Existing guest fingerprint only (does not create an id). Used when claiming history after login. */
+export function getStoredGuestId(): string {
+  const s = getStorage();
+  if (!s) return '';
+  return s.getItem(GUEST_ID_KEY)?.trim() ?? '';
+}
+
 /** Reported demo tokens used for the guest (client-side cache; server is source of truth). */
 export function getGuestCount(storage?: Storage): number {
   const s = getStorage(storage);
   if (!s) return 0;
+  if (s.getItem(GUEST_TOKENS_KEY) == null) {
+    const legacy = s.getItem(LEGACY_GUEST_COUNT_KEY);
+    if (legacy != null) s.setItem(GUEST_TOKENS_KEY, legacy);
+  }
   const v = s.getItem(GUEST_TOKENS_KEY);
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return 0;
@@ -49,6 +63,12 @@ export function clearGuestSession(storage?: Storage): void {
   if (!s) return;
   s.removeItem(GUEST_ID_KEY);
   s.removeItem(GUEST_TOKENS_KEY);
+  s.removeItem(LEGACY_GUEST_COUNT_KEY);
+}
+
+/** @deprecated Prefer `clearGuestSession`; kept for claim-guest-history / profile helpers. */
+export function clearGuestLocalStorage(storage?: Storage): void {
+  clearGuestSession(storage);
 }
 
 /** Max free optimizations for an anonymous guest (matches product copy). */

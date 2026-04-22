@@ -13,16 +13,49 @@
       margin: 0;
       padding: 16px;
       width: 320px;
-      min-height: 280px;
+      min-height: 320px;
       background: #050505;
       color: #ECECEC;
       font-family: 'Space Grotesk', -apple-system, sans-serif;
       font-size: 14px;
     }
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
     h1 {
-      margin: 0 0 16px;
+      margin: 0;
       font-size: 16px;
       font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .version {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: #71717a;
+      background: #18181b;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #27272a;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .links a {
+      font-size: 12px;
+      color: #4552FF;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .links a:hover {
+      text-decoration: underline;
     }
     label {
       display: block;
@@ -45,7 +78,7 @@
       outline: none;
       border-color: #4552FF;
     }
-    button {
+    button#save {
       width: 100%;
       padding: 10px;
       border: none;
@@ -57,20 +90,60 @@
       font-weight: 500;
       cursor: pointer;
     }
-    button:hover { background: #5563FF; }
+    button#save:hover { background: #5563FF; }
     #status {
       margin-top: 12px;
       font-size: 12px;
+      min-height: 1.25em;
     }
     #status.connected { color: #22c55e; }
     #status.disconnected { color: #ef4444; }
+    .hint {
+      margin: 0 0 12px;
+      font-size: 12px;
+      color: #71717a;
+      line-height: 1.45;
+    }
+    footer {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #27272a;
+      font-size: 11px;
+      color: #71717a;
+      line-height: 1.5;
+    }
+    footer a {
+      color: #4552FF;
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .footer-brand img {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
-  <h1>PromptPerfect</h1>
-  <p style="margin:0 0 12px; font-size:12px; color:#71717a;">Set the URL of your PromptPerfect app. Use <code style="background:#27272a; padding:2px 6px; border-radius:4px;">http://localhost:3000</code> for local dev.</p>
+  <div class="header-row">
+    <h1>PromptPerfect</h1>
+    <span id="ext-version" class="version" title="Extension version">…</span>
+  </div>
+  <div class="links">
+    <a id="link-app" href="https://promptperfect.vercel.app" target="_blank" rel="noopener noreferrer">Open app</a>
+    <a id="link-docs" href="https://promptperfect.vercel.app/docs" target="_blank" rel="noopener noreferrer">Docs</a>
+  </div>
+  <p class="hint">
+    Default API URL is production. Use <code style="background:#27272a;padding:2px 6px;border-radius:4px;font-size:11px;">http://localhost:3000</code> for local dev.
+  </p>
   <label for="apiUrl">API URL</label>
-  <input type="text" id="apiUrl" placeholder="http://localhost:3000 or https://your-app.vercel.app" />
+  <input type="text" id="apiUrl" placeholder="https://promptperfect.vercel.app" />
   <label for="mode">Mode</label>
   <select id="mode">
     <option value="better">Better</option>
@@ -79,8 +152,16 @@
   </select>
   <label for="apiKey">API Key (optional)</label>
   <input type="password" id="apiKey" placeholder="Leave empty for default Gemini" />
-  <button id="save">Save</button>
+  <button type="button" id="save">Save</button>
   <p id="status"></p>
+
+  <footer>
+    <div class="footer-brand">
+      <img src="../icons/icon128.png" width="22" height="22" alt="" />
+      <span><strong style="color:#a1a1aa;">Beagle</strong> — Prompt engineering, productized.</span>
+    </div>
+    <a href="https://beaglecorp.com" target="_blank" rel="noopener noreferrer">beaglecorp.com</a>
+  </footer>
   <script src="popup.js"></script>
 </body>
 </html>

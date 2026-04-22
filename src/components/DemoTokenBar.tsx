@@ -1,37 +1,43 @@
 'use client';
 
-import { getGuestLimit } from '@/lib/guest';
+import { getGuestCount, getGuestLimit } from '@/lib/guest';
 
 interface DemoTokenBarProps {
-  count: number;
+  isAuthenticated: boolean;
 }
 
-export function DemoTokenBar({ count }: DemoTokenBarProps) {
+export function DemoTokenBar({ isAuthenticated }: DemoTokenBarProps) {
   const limit = getGuestLimit();
-  const remaining = Math.max(0, limit - count);
-  const percentage = Math.min(100, (count / limit) * 100);
 
-  const barColor =
-    remaining === 0
-      ? '#EF4444'
-      : remaining === 1
-        ? '#F59E0B'
-        : '#4552FF';
+  if (isAuthenticated) return null;
+
+  const count = getGuestCount();
+  const percentage = limit > 0 ? (count / limit) * 100 : 0;
+  const remaining = Math.max(0, limit - count);
 
   return (
-    <div className="w-full max-w-[300px] mx-auto mt-3">
-      <div className="flex justify-between items-center mb-1.5">
-        <span className="text-[#B0B0B0] text-xs font-body">
+    <div className="mx-auto mb-4 w-full max-w-2xl">
+      <p className="mb-1 text-center text-sm text-[#B0B0B0]">
+        {count} of {limit} free optimizations used
+      </p>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-sm text-[#B0B0B0]">
           {remaining > 0
-            ? `${count} of ${limit} free optimizations used`
+            ? `${remaining} free optimization${remaining !== 1 ? 's' : ''} remaining`
             : 'Free limit reached — sign up for unlimited'}
         </span>
-        <span className="text-[#71717A] text-xs">{remaining} left</span>
+        <span className="text-xs text-[#71717A]">
+          {count}/{limit}
+        </span>
       </div>
-      <div className="w-full bg-[#252525] rounded-full h-1">
+      <div className="h-1.5 w-full rounded-full bg-[#252525]">
         <div
-          className="h-1 rounded-full transition-all duration-500"
-          style={{ width: `${percentage}%`, backgroundColor: barColor }}
+          className="h-1.5 rounded-full transition-all duration-500"
+          style={{
+            width: `${Math.min(100, percentage)}%`,
+            backgroundColor:
+              remaining > 2 ? '#4552FF' : remaining > 0 ? '#F59E0B' : '#EF4444',
+          }}
         />
       </div>
     </div>

@@ -1,94 +1,152 @@
-import { validatePassword, validateEmail } from '@/lib/auth/validation';
-import { checkRateLimit } from '@/lib/auth/rateLimit';
-import { migrateGuestHistoryAdmin } from '@/lib/server/guestHistoryMigration';
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { validatePassword, validateEmail } from '@/lib/auth/validation'
+import { checkRateLimit } from '@/lib/auth/rateLimit'
+import { getEmailConfirmationRedirectUrl } from '@/lib/auth/oauthRedirect'
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+import {
+  getSupabaseUrl,
+  normalizeEnvValue,
+} from '@/lib/client/supabase'
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = getSupabaseUrl()
   const key =
-    process.env.SUPABASE_SERVICE_KEY?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) return null;
-  return createClient(url, key);
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_KEY) ||
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  if (!url || !key) return null
+  return createClient(url, key)
 }
 
 export async function POST(request: Request) {
   const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
   if (!checkRateLimit(ip)) {
     return NextResponse.json(
       { error: 'Too many attempts. Please wait a minute.' },
       { status: 429 },
-    );
+    )
   }
 
-  try {
-    const body = await request.json();
-    const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const password = typeof body.password === 'string' ? body.password : '';
-    const name = typeof body.name === 'string' ? body.name.trim() : '';
-    const guestId =
-      typeof body.guestId === 'string' ? body.guestId.trim() : '';
+  const body = await request.json()
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
 
-    if (!validateEmail(email)) {
-      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
-    }
-    const validation = validatePassword(password);
-    if (!validation.isValid) {
-      return NextResponse.json({ error: validation.errors[0] }, { status: 400 });
-    }
+  if (!validateEmail(email)) {
+    return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
+  }
+  const validation = validatePassword(password)
+  if (!validation.isValid) {
+    return NextResponse.json({ error: validation.errors[0] }, { status: 400 })
+  }
 
-    const supabase = getServiceSupabase();
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-    }
+  const url = getSupabaseUrl()
+  const anonKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  if (!url || !anonKey) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+  }
 
-    const { data, error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: false,
-    });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+  /** Required so confirmation emails redirect to `/auth/callback` (must be allowlisted). */
+  const emailRedirectTo = getEmailConfirmationRedirectUrl(request)
 
-    const uid = data.user?.id;
-    if (uid) {
-      const { error: insertErr } = await supabase.from('pp_users').insert({
-        id: uid,
-        name: name || null,
+  const anon = createClient(url, anonKey)
+  const { data: signUpData, error: signUpErr } = await anon.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo,
+      ...(name ? { data: { full_name: name, name } } : {}),
+    },
+  })
+
+  if (signUpErr) {
+    const msg = signUpErr.message || 'Sign up failed'
+    const dbNewUser = /database error creating new user/i.test(msg)
+    return NextResponse.json(
+      {
+        error: msg,
+        ...(dbNewUser && {
+          hint:
+            'Your Supabase auth trigger could not insert into pp_user_profiles (usually RLS). In Supabase → SQL Editor, run section 5 of supabase/run-all.sql, or migrations 20250407100000_fix_handle_new_user_rls.sql and 20250408100000_handle_new_user_owner.sql from this repo.',
+        }),
+      },
+      { status: 400 },
+    )
+  }
+
+  const uid = signUpData.user?.id
+  if (!uid) {
+    return NextResponse.json({ error: 'Sign up failed' }, { status: 400 })
+  }
+
+  const supabase = getServiceSupabase()
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+  }
+
+  const { error: insertErr } = await supabase.from('pp_users').insert({
+    id: uid,
+    name: name || null,
+    email,
+    password_hash: 'supabase_auth',
+    provider: 'gemini',
+    model: 'gemini-2.0-flash',
+    api_key: '',
+  })
+  if (insertErr && insertErr.code !== '23505') {
+    return NextResponse.json(
+      { error: insertErr.message || 'Could not create profile' },
+      { status: 500 },
+    )
+  }
+
+  /** Profile display_name comes from auth trigger (globally unique). Do not overwrite with plain signup name — avoids collisions. */
+
+  const { data: profile } = await supabase
+    .from('pp_users')
+    .select('id, name, email, provider, model')
+    .eq('id', uid)
+    .maybeSingle()
+
+  const userPayload = profile ?? {
+    id: uid,
+    name: name || null,
+    email,
+    provider: 'gemini',
+    model: 'gemini-2.0-flash',
+  }
+
+  /**
+   * Only return a session when the address is verified. (Supabase should not
+   * return a session if “Confirm email” is on; this is a safety net if the
+   * project has that option disabled.)
+   */
+  const authUser = signUpData.user
+  if (signUpData.session && authUser) {
+    if (authUser.email_confirmed_at) {
+      return NextResponse.json({
+        verificationRequired: false,
         email,
-        password_hash: 'supabase_auth',
-        provider: 'gemini',
-        model: 'gemini-2.0-flash',
-        api_key: '',
-      });
-      if (insertErr && insertErr.code !== '23505') {
-        return NextResponse.json(
-          { error: insertErr.message || 'Could not create profile' },
-          { status: 500 },
-        );
-      }
+        user: userPayload,
+        session: {
+          access_token: signUpData.session.access_token,
+          refresh_token: signUpData.session.refresh_token,
+        },
+      })
     }
-
-    let guestMigrated = false;
-    if (uid && guestId) {
-      const { error: migErr } = await migrateGuestHistoryAdmin(uid, guestId);
-      guestMigrated = !migErr;
-    }
-
-    const { data: profile } = await supabase
-      .from('pp_users')
-      .select('id, name, email, provider, model')
-      .eq('email', email)
-      .maybeSingle();
-
     return NextResponse.json({
-      user: profile ?? data.user,
-      guestMigrated,
-    });
-  } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+      verificationRequired: true,
+      email,
+      message:
+        'Check your email to verify your account, then sign in with your password.',
+    })
   }
+
+  return NextResponse.json({
+    verificationRequired: true,
+    email,
+    message:
+      'Check your email to verify your account, then sign in with your password.',
+  })
 }

@@ -11,34 +11,47 @@ import { ExplanationPanel } from '@/components/ExplanationPanel';
 import { HistoryPanel, type OptimizationHistoryItem } from '@/components/HistoryPanel';
 import {
   explanationTextFromFullCompletion,
+  getOrCreateSessionId,
   optimizedTextFromFullCompletion,
   saveToHistory,
 } from '@/lib/client/optimizationHistory';
 import { FeedbackButtons } from '@/components/FeedbackButtons';
 import { ShareButton } from '@/components/ShareButton';
+import { SavePromptButton } from '@/components/SavePromptButton';
 import { StatsBar } from '@/components/StatsBar';
 import { AppSettingsPanel } from '@/components/AppSettingsPanel';
-import { SavePromptButton } from '@/components/SavePromptButton';
 import { DemoTokenBar } from '@/components/DemoTokenBar';
 import { DemoLimitModal } from '@/components/DemoLimitModal';
 import {
   getGuestId,
   getGuestCount,
+  setGuestCount,
   incrementGuestCount,
   isGuestLimitReached,
 } from '@/lib/guest';
 import type { OptimizationMode, Provider } from '@/lib/types';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import {
+  clearPromptPerfectLocalAuth,
+  syncPpUserFromAuthSession,
+} from '@/lib/client/ppUserSync';
+import { readStatsBarCache } from '@/lib/client/statsBarCache';
+import { userFacingOptimizeError } from '@/lib/optimizeUserError';
+import {
+  CHANGES_DELIMITER,
+  EXPLANATION_DELIMITER,
+  stripPromptScoreMarkers,
+} from '@/lib/delimiter';
+import { UserAccountMenu } from '@/components/UserAccountMenu';
 
 const STORAGE_KEY = 'promptperfect:apikey';
-const REOPTIMIZE_SESSION_KEY = 'pp_reoptimize';
-const EXPLANATION_DELIMITER = '---EXPLANATION---';
-const CHANGES_DELIMITER = '---CHANGES---';
-const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
 
 function getOptimizedPromptText(fullText: string): string {
   const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
-  const beforeExplanation = explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
-  return beforeExplanation.replace(SCORE_PATTERN, '').trim();
+  const beforeExplanation =
+    explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
+  return stripPromptScoreMarkers(beforeExplanation);
 }
 
 function generateSessionId(): string {
@@ -60,6 +73,24 @@ function loadApiKey(provider: Provider): string {
   } catch {
     return '';
   }
+}
+
+const FEEDBACK_MODES: readonly OptimizationMode[] = [
+  'better',
+  'specific',
+  'cot',
+  'developer',
+  'research',
+  'beginner',
+  'product',
+  'marketing',
+] as const;
+
+function modeFromHistoryRow(mode: string): OptimizationMode {
+  const m = mode.trim().toLowerCase();
+  return (FEEDBACK_MODES as readonly string[]).includes(m)
+    ? (m as OptimizationMode)
+    : 'better';
 }
 
 interface PPUser {
@@ -88,38 +119,148 @@ export default function AppPage() {
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [statsRefresh, setStatsRefresh] = useState(0);
+  /** Instant bump until /api/stats finishes after feedback + delayed refresh. */
+  const [thumbOptimistic, setThumbOptimistic] = useState({ up: 0, down: 0 });
   const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [selectedHistoryItem, setSelectedHistoryItem] =
+    useState<OptimizationHistoryItem | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [guestUsageVersion, setGuestUsageVersion] = useState(0);
+  const [usageGateError, setUsageGateError] = useState<string | null>(null);
   const optimizeContextRef = useRef({ mode: 'better' as OptimizationMode });
+  const optimizeSessionIdRef = useRef<string | null>(null);
+  const userRef = useRef<PPUser | null>(null);
+  const selectedHistoryItemRef = useRef<OptimizationHistoryItem | null>(null);
+  const historyIdRef = useRef<string | null>(null);
+  /** Last successful /api/stats thumb counts — used to detect when server reflects new feedback. */
+  const lastServerThumbsRef = useRef({ up: 0, down: 0 });
+  /** Baseline thumbs at feedback submit time; optimistic clears only after server totals change. */
+  const thumbFeedbackPendingRef = useRef<{
+    baselineUp: number;
+    baselineDown: number;
+  } | null>(null);
 
   const [syncCompletion, setSyncCompletion] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-
-  // Guest mode state
-  const [showLimitModal, setShowLimitModal] = useState(false);
-  const [guestCount, setGuestCount] = useState(0);
+  /** Whether this history row is already in the library (server). */
+  const [inLibrary, setInLibrary] = useState<boolean | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleStatsThumbsSynced = useCallback(
+    (payload: { thumbsUp: number; thumbsDown: number }) => {
+      const nu = Number(payload.thumbsUp);
+      const nd = Number(payload.thumbsDown);
+      const up = Number.isFinite(nu) ? nu : 0;
+      const down = Number.isFinite(nd) ? nd : 0;
+
+      const pending = thumbFeedbackPendingRef.current;
+      if (pending) {
+        const bu = Number(pending.baselineUp);
+        const bd = Number(pending.baselineDown);
+        const baseUp = Number.isFinite(bu) ? bu : 0;
+        const baseDown = Number.isFinite(bd) ? bd : 0;
+        /** Only drop optimistic overlay once totals actually move off the pre-submit baseline. */
+        const serverCaughtUp = up !== baseUp || down !== baseDown;
+        if (serverCaughtUp) {
+          thumbFeedbackPendingRef.current = null;
+          setThumbOptimistic({ up: 0, down: 0 });
+        }
+      }
+      lastServerThumbsRef.current = { up, down };
+    },
+    [],
+  );
+
+  const handleFeedbackSubmitted = useCallback((direction: 'up' | 'down') => {
+    thumbFeedbackPendingRef.current = {
+      baselineUp: lastServerThumbsRef.current.up,
+      baselineDown: lastServerThumbsRef.current.down,
+    };
+    setThumbOptimistic((o) => ({
+      up: o.up + (direction === 'up' ? 1 : 0),
+      down: o.down + (direction === 'down' ? 1 : 0),
+    }));
+    const delaysMs = [450, 1100, 2600, 5200];
+    for (const ms of delaysMs) {
+      window.setTimeout(() => {
+        setStatsRefresh((n) => n + 1);
+      }, ms);
+    }
+    setHistoryRefresh((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mounted) return;
+    const raw = sessionStorage.getItem('pp_reoptimize');
+    if (!raw) return;
+    sessionStorage.removeItem('pp_reoptimize');
+    try {
+      const o = JSON.parse(raw) as { text?: string; mode?: string };
+      if (typeof o.text === 'string') setInputText(o.text);
+      if (o.mode === 'better' || o.mode === 'specific' || o.mode === 'cot') {
+        setSelectedMode(o.mode);
+      }
+    } catch {
+      // ignore invalid payload
+    }
+  }, [mounted]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    selectedHistoryItemRef.current = selectedHistoryItem;
+  }, [selectedHistoryItem]);
+
+  useEffect(() => {
+    historyIdRef.current = historyId;
+  }, [historyId]);
+
+  /** Align feedback baseline with cached analytics when remounting /app after visiting other routes. */
+  useEffect(() => {
+    const uid = user?.id?.trim();
+    if (!uid) return;
+    const c = readStatsBarCache(uid);
+    if (c) {
+      lastServerThumbsRef.current = {
+        up: c.thumbsUp,
+        down: c.thumbsDown,
+      };
+    }
+  }, [user?.id]);
+
+  const providerRef = useRef(provider);
+  useEffect(() => {
+    providerRef.current = provider;
+  }, [provider]);
 
   useEffect(() => {
     if (!mounted) return;
     const id = setTimeout(() => {
       try {
         const raw = localStorage.getItem('pp_user');
-        if (raw) {
-          const u = JSON.parse(raw) as PPUser;
-          setUser(u);
-          setProvider((u.provider as Provider) || 'gemini');
-          setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
+        if (!raw) {
+          setUser(null);
+          setProvider('gemini');
+          setApiKey('');
+          setHydrated(true);
+          return;
         }
-        // Always load guest count (used to sync bar even for signed-in users who had guest runs)
-        setGuestCount(getGuestCount());
+        const u = JSON.parse(raw) as PPUser;
+        setUser(u);
+        setProvider((u.provider as Provider) || 'gemini');
+        setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
+        setHydrated(true);
       } catch {
-        // Invalid stored data — fall through to guest mode
-      } finally {
+        setUser(null);
+        setProvider('gemini');
+        setApiKey('');
         setHydrated(true);
       }
     }, 0);
@@ -127,58 +268,90 @@ export default function AppPage() {
   }, [mounted]);
 
   useEffect(() => {
+    if (!mounted || !hydrated) return;
+    const client = createSupabaseBrowserClient();
+    if (!client) return;
+    let cancelled = false;
+    void syncPpUserFromAuthSession(client).then((updated) => {
+      if (cancelled || !updated) return;
+      try {
+        const raw = localStorage.getItem('pp_user');
+        if (!raw) return;
+        const u = JSON.parse(raw) as PPUser;
+        setUser(u);
+        setProvider((u.provider as Provider) || 'gemini');
+        setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
+      } catch {
+        // ignore
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, hydrated]);
+
+  useEffect(() => {
+    if (!mounted || !hydrated || user) return;
+    const gid = getGuestId();
+    if (!gid) return;
+    void fetch(`/api/guest-usage?guestId=${encodeURIComponent(gid)}`)
+      .then((r) => r.json())
+      .then(
+        (data: {
+          count?: number;
+          serverTracking?: boolean;
+        }) => {
+          if (data.serverTracking === false) return;
+          if (typeof data.count === 'number') {
+            const merged = Math.max(getGuestCount(), data.count);
+            setGuestCount(merged);
+            setGuestUsageVersion((v) => v + 1);
+          }
+        },
+      )
+      .catch(() => {});
+  }, [mounted, hydrated, user]);
+
+  useEffect(() => {
     setApiKey(loadApiKey(provider));
   }, [provider]);
 
   useEffect(() => {
-    if (!mounted || !hydrated) return;
-    try {
-      const raw = sessionStorage.getItem(REOPTIMIZE_SESSION_KEY);
-      if (!raw) return;
-      sessionStorage.removeItem(REOPTIMIZE_SESSION_KEY);
-      const data = JSON.parse(raw) as {
-        original_prompt?: unknown;
-        text?: unknown;
-        mode?: unknown;
-      };
-      const promptText =
-        typeof data.original_prompt === 'string'
-          ? data.original_prompt
-          : typeof data.text === 'string'
-            ? data.text
-            : null;
-      if (promptText) setInputText(promptText);
-
-      if (typeof data.mode === 'string') {
-        const m = data.mode.trim().toLowerCase();
-        const normalized =
-          m === 'chain-of-thought' || m === 'chain_of_thought' ? 'cot' : m;
-        const allowed: OptimizationMode[] = [
-          'better',
-          'specific',
-          'cot',
-          'developer',
-          'research',
-          'beginner',
-          'product',
-          'marketing',
-        ];
-        if (allowed.includes(normalized as OptimizationMode)) {
-          setSelectedMode(normalized as OptimizationMode);
-        }
-      }
-    } catch {
-      try {
-        sessionStorage.removeItem(REOPTIMIZE_SESSION_KEY);
-      } catch {
-        // ignore
-      }
-    }
-  }, [mounted, hydrated]);
-
-  useEffect(() => {
     optimizeContextRef.current.mode = selectedMode;
   }, [selectedMode]);
+
+  useEffect(() => {
+    if (!user?.id || !historyId || !/^[\da-f-]{36}$/i.test(historyId)) {
+      setInLibrary(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        if (!cancelled) setInLibrary(false);
+        return;
+      }
+      const headers = await getPromptPerfectAuthHeaders(client);
+      if (!headers) {
+        if (!cancelled) setInLibrary(false);
+        return;
+      }
+      try {
+        const r = await fetch(
+          `/api/saved-prompts/status?history_id=${encodeURIComponent(historyId)}`,
+          { headers },
+        );
+        const j = (await r.json().catch(() => ({}))) as { saved?: boolean };
+        if (!cancelled) setInLibrary(!!j.saved);
+      } catch {
+        if (!cancelled) setInLibrary(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, historyId]);
 
   useEffect(() => {
     const open = () => setSettingsOpen(true);
@@ -202,16 +375,22 @@ export default function AppPage() {
       provider,
     },
     onFinish: async (prompt, completion) => {
-      setStatsRefresh((n) => n + 1);
-      setHistoryRefresh((n) => n + 1);
+      const u = userRef.current;
+      const authed = !!u;
       const histId = await saveToHistory({
         prompt_original: prompt.trim(),
         prompt_optimized: optimizedTextFromFullCompletion(completion),
         mode: optimizeContextRef.current.mode,
         explanation: explanationTextFromFullCompletion(completion),
-        provider,
+        sessionId: authed ? getOrCreateSessionId() : getGuestId(),
+        userId: u?.id,
+        provider: providerRef.current,
+        optimizeSessionId: optimizeSessionIdRef.current ?? undefined,
       });
       setHistoryId(histId);
+      /** Refresh stats/history after the row exists so thumbs aggregate includes this session. */
+      setStatsRefresh((n) => n + 1);
+      setHistoryRefresh((n) => n + 1);
     },
     fetch: async (input, init) => {
       const res = await fetch(input, init);
@@ -241,8 +420,8 @@ export default function AppPage() {
 
   const handleOptimize = useCallback(async () => {
     if (!inputText.trim()) return;
+    setUsageGateError(null);
 
-    // Guest limit enforcement
     if (!user) {
       if (isGuestLimitReached()) {
         setShowLimitModal(true);
@@ -253,24 +432,53 @@ export default function AppPage() {
       const res = await fetch('/api/guest-usage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guestId, mode: selectedMode, provider }),
+        body: JSON.stringify({
+          guestId,
+          mode: selectedMode,
+          provider,
+        }),
       });
 
       if (res.status === 429) {
+        const body = (await res.json().catch(() => ({}))) as {
+          count?: number;
+        };
+        if (typeof body.count === 'number') {
+          setGuestCount(body.count);
+        }
+        setGuestUsageVersion((v) => v + 1);
         setShowLimitModal(true);
         return;
       }
 
-      const newCount = incrementGuestCount();
-      setGuestCount(newCount);
+      if (!res.ok) {
+        setUsageGateError('Could not verify guest usage. Try again.');
+        return;
+      }
+
+      const data = (await res.json().catch(() => ({}))) as {
+        count?: number;
+        persisted?: boolean;
+      };
+
+      if (data.persisted === false) {
+        incrementGuestCount();
+      } else if (typeof data.count === 'number') {
+        setGuestCount(data.count);
+      } else {
+        incrementGuestCount();
+      }
+      setGuestUsageVersion((v) => v + 1);
     }
 
     const sid = generateSessionId();
+    optimizeSessionIdRef.current = sid;
     const trimmed = inputText.trim();
     optimizeContextRef.current.mode = selectedMode;
     setExplanation('');
     setSessionId(sid);
-    setHistoryId(null);
+    setSelectedHistoryItem(null);
+    setHistoryId(null); // Reset history ID for new optimization
     setRunMeta({ mode: selectedMode, provider, inputLength: trimmed.length });
 
     const coreBody = {
@@ -317,51 +525,73 @@ export default function AppPage() {
           };
         })
         .then(async (data) => {
-          const { optimizedText, explanation: expl, changes, rawText } = data;
-          const raw = typeof rawText === 'string' ? rawText : '';
-          const scoreMatch = raw.match(SCORE_PATTERN);
-          const scorePrefix = scoreMatch ? `${scoreMatch[0]}\n` : '';
+          const { optimizedText, explanation: expl, changes } = data;
           const full =
-            scorePrefix +
             (optimizedText ?? '') +
             (expl ? `\n${EXPLANATION_DELIMITER}\n${expl}` : '') +
             (changes ? `\n${CHANGES_DELIMITER}\n${changes}` : '');
           setSyncCompletion(full);
           setExplanation(expl || '');
-          setStatsRefresh((n) => n + 1);
-          setHistoryRefresh((n) => n + 1);
           const histId = await saveToHistory({
             prompt_original: trimmed,
             prompt_optimized: (optimizedText ?? '').trim(),
             mode: selectedMode,
             explanation: (expl ?? '').trim(),
+            sessionId: user ? getOrCreateSessionId() : getGuestId(),
+            userId: user?.id,
             provider,
+            optimizeSessionId: sid,
           });
           setHistoryId(histId);
+          setStatsRefresh((n) => n + 1);
+          setHistoryRefresh((n) => n + 1);
         })
         .catch((err) =>
           setSyncError(err instanceof Error ? err.message : 'Request failed'),
         )
         .finally(() => setSyncLoading(false));
     }
-  }, [
-    inputText,
-    selectedMode,
-    provider,
-    apiKey,
-    hasApiKey,
-    isGemini,
-    complete,
-    user,
-  ]);
+  }, [user, inputText, selectedMode, provider, apiKey, hasApiKey, isGemini, complete]);
 
-  const [selectedHistoryItem, setSelectedHistoryItem] =
-    useState<OptimizationHistoryItem | null>(null);
+  const resetComposerToNewPrompt = useCallback(() => {
+    setSelectedHistoryItem(null);
+    setHistoryId(null);
+    setSessionId(null);
+    setRunMeta(null);
+    optimizeSessionIdRef.current = null;
+    setSelectedMode('better');
+    setInputText('');
+    setExplanation('');
+    setInLibrary(null);
+    setSyncError(null);
+    setSyncLoading(false);
+    setUsageGateError(null);
+    if (isGemini) {
+      setStreamCompletion('');
+    } else {
+      setSyncCompletion('');
+    }
+  }, [isGemini, setStreamCompletion]);
 
   const handleHistorySelect = useCallback(
     (item: OptimizationHistoryItem) => {
+      if (selectedHistoryItemRef.current?.id === item.id) {
+        resetComposerToNewPrompt();
+        return;
+      }
+
       setSelectedHistoryItem(item);
-      setHistoryId(item.id);
+      setHistoryId(item.id); // Share + Save + library status use history row id
+      /** Prefer per-run optimize id for logs; legacy rows use history id so feedback works without re-running Optimize. */
+      const feedbackSessionId =
+        item.optimize_session_id?.trim() || item.id.trim() || null;
+      setSessionId(feedbackSessionId);
+      setRunMeta({
+        mode: modeFromHistoryRow(item.mode),
+        provider,
+        inputLength: item.prompt_original.trim().length,
+      });
+      setSelectedMode(modeFromHistoryRow(item.mode));
       const full =
         item.prompt_optimized +
         (item.explanation.trim()
@@ -375,11 +605,31 @@ export default function AppPage() {
         setSyncCompletion(full);
       }
     },
-    [isGemini, setStreamCompletion],
+    [isGemini, provider, resetComposerToNewPrompt, setStreamCompletion],
   );
 
-  const handleLogout = () => {
-    localStorage.removeItem('pp_user');
+  const handleHistoryDeleted = useCallback((deletedId: string) => {
+    setHistoryRefresh((n) => n + 1);
+    setStatsRefresh((n) => n + 1);
+    if (selectedHistoryItemRef.current?.id === deletedId) {
+      setSelectedHistoryItem(null);
+      setSessionId(null);
+    }
+    setHistoryId((hid) => (hid === deletedId ? null : hid));
+    if (historyIdRef.current === deletedId) {
+      setInLibrary(false);
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    const client = createSupabaseBrowserClient();
+    await clearPromptPerfectLocalAuth(client ?? null);
+    try {
+      localStorage.removeItem('pp:optimization_session_id');
+    } catch {
+      /* ignore */
+    }
+    setUser(null);
     router.replace('/');
   };
 
@@ -391,10 +641,10 @@ export default function AppPage() {
     );
   }
 
-  const isGuest = !user;
-
   return (
-    <div className={`relative flex min-h-screen w-full flex-col bg-[#050505] font-sans${isGuest ? '' : ' md:pr-72'}`}>
+    <div
+      className={`relative flex min-h-screen w-full flex-col bg-[#050505] font-sans${user ? ' md:pr-72' : ''}`}
+    >
       <header className="fixed left-0 right-0 top-0 z-40 flex h-14 shrink-0 items-center border-b border-[#1a1a1a] bg-[#050505]/95 backdrop-blur-sm">
         <div className="flex w-full min-w-0 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link
@@ -407,31 +657,13 @@ export default function AppPage() {
             <span className="text-sm text-[#71717A]">by Beagle</span>
           </Link>
           <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
-            {isGuest ? (
+            {user ? (
               <>
                 <Link
-                  href="/login"
+                  href="/library"
                   className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
                 >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-lg bg-[#4552FF] px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  Sign up free
-                </Link>
-              </>
-            ) : (
-              <>
-                <span className="hidden text-sm text-[#888] sm:inline">
-                  Hi, {user.name || user.email}
-                </span>
-                <Link
-                  href="/profile"
-                  className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
-                >
-                  Profile
+                  Library
                 </Link>
                 <button
                   type="button"
@@ -441,13 +673,38 @@ export default function AppPage() {
                 >
                   ⚙️ Settings
                 </button>
-                <button
-                  type="button"
-                  onClick={handleLogout}
+                <UserAccountMenu
+                  key={user.id}
+                  userId={user.id}
+                  fallbackDisplayName={
+                    user.name?.trim() ||
+                    user.email.split('@')[0] ||
+                    user.email ||
+                    'there'
+                  }
+                  onLogout={handleLogout}
+                />
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/library"
                   className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
                 >
-                  Log out
-                </button>
+                  Library
+                </Link>
+                <Link
+                  href="/login"
+                  className="rounded-lg border border-transparent px-3 py-1.5 text-sm text-[#888] transition-all duration-200 ease-out hover:border-[#2a2a2a] hover:bg-[#111] hover:text-[#ECECEC]"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="rounded-lg bg-[#4552FF] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-95"
+                >
+                  Sign up
+                </Link>
               </>
             )}
           </div>
@@ -455,13 +712,18 @@ export default function AppPage() {
       </header>
 
       <main className="smooth-scroll mt-14 flex min-h-0 w-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
-        {!isGuest && (
+        {user && (
           <div className="shrink-0 px-6 pt-5">
-            <StatsBar refreshTrigger={statsRefresh} />
+            <StatsBar
+              refreshTrigger={statsRefresh}
+              cacheUserId={user.id}
+              optimisticThumbs={thumbOptimistic}
+              onStatsFetched={handleStatsThumbsSynced}
+            />
           </div>
         )}
 
-        {/* Two-column textarea section */}
+        {/* Two-column textarea section: row on large screens, normal flow, no overlap */}
         <div className="flex w-full flex-col gap-5 px-6 pb-0 pt-6 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1">
             <PromptInput
@@ -480,33 +742,32 @@ export default function AppPage() {
               onExplanation={setExplanation}
               afterTextarea={
                 completion && !isLoading ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     {historyId && <ShareButton historyId={historyId} />}
+                    <SavePromptButton
+                      originalPrompt={inputText}
+                      optimizedPrompt={getOptimizedPromptText(completion)}
+                      explanation={explanation}
+                      mode={runMeta?.mode ?? selectedMode}
+                      provider={runMeta?.provider ?? provider}
+                      userId={user?.id ?? null}
+                      historyId={historyId}
+                      alreadySaved={inLibrary === true}
+                      onSavedToLibrary={() => setInLibrary(true)}
+                    />
                     <FeedbackButtons
                       sessionId={sessionId}
                       mode={runMeta?.mode ?? selectedMode}
                       provider={runMeta?.provider ?? provider}
                       inputLength={runMeta?.inputLength ?? inputText.trim().length}
                       outputLength={getOptimizedPromptText(completion).length}
-                      disabled={false}
-                      onSubmitted={() => setStatsRefresh((n) => n + 1)}
+                      disabled={Boolean(user?.id && !historyId)}
+                      onSubmitted={handleFeedbackSubmitted}
                     />
                   </div>
                 ) : null
               }
             />
-            {!isGuest && user && completion && !isLoading ? (
-              <div className="mt-2">
-                <SavePromptButton
-                  originalPrompt={inputText}
-                  optimizedPrompt={getOptimizedPromptText(completion)}
-                  explanation={explanation}
-                  mode={selectedMode}
-                  provider={provider}
-                  userId={user.id}
-                />
-              </div>
-            ) : null}
           </div>
         </div>
 
@@ -526,23 +787,28 @@ export default function AppPage() {
             </div>
             <button
               type="button"
-              onClick={() => { void handleOptimize(); }}
+              onClick={() => void handleOptimize()}
               disabled={!inputText.trim() || isLoading}
               className="mt-4 flex h-12 w-full max-w-[300px] cursor-pointer items-center justify-center rounded-[12px] border-none bg-[linear-gradient(135deg,#4552FF,#5c6aff)] text-[15px] font-semibold text-white transition-opacity duration-200 ease-out hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? 'Optimizing…' : 'Optimize'}
             </button>
-
-            {/* Guest usage progress bar */}
-            {isGuest && (
-              <DemoTokenBar count={guestCount} />
-            )}
+            <DemoTokenBar
+              key={guestUsageVersion}
+              isAuthenticated={!!user}
+            />
           </div>
         </div>
 
+        {usageGateError && (
+          <p className="shrink-0 px-6 pb-2 text-center text-sm text-red-400">
+            {usageGateError}
+          </p>
+        )}
+
         {error && (
           <p className="shrink-0 px-6 pb-2 text-center text-sm text-red-400">
-            {error.message}
+            {userFacingOptimizeError(error)}
           </p>
         )}
 
@@ -555,7 +821,7 @@ export default function AppPage() {
         </div>
       </main>
 
-      {!isGuest && user && (
+      {user && (
         <AppSettingsPanel
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
@@ -568,21 +834,23 @@ export default function AppPage() {
         />
       )}
 
-      {!isGuest && user && (
-        <aside className="fixed bottom-0 right-0 top-14 z-30 hidden h-[calc(100vh-3.5rem)] w-72 md:block">
-          <HistoryPanel
-            onSelect={handleHistorySelect}
-            refreshTrigger={historyRefresh}
-            selectedId={selectedHistoryItem?.id ?? null}
-            userId={user.id}
-          />
-        </aside>
-      )}
-
       <DemoLimitModal
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
       />
+
+      {user && (
+        <aside className="fixed bottom-0 right-0 top-14 z-30 hidden h-[calc(100vh-3.5rem)] w-72 md:block">
+          <HistoryPanel
+            userId={user.id}
+            onSelect={handleHistorySelect}
+            onDeleted={handleHistoryDeleted}
+            onNewPrompt={resetComposerToNewPrompt}
+            refreshTrigger={historyRefresh}
+            selectedId={selectedHistoryItem?.id ?? null}
+          />
+        </aside>
+      )}
     </div>
   );
 }
