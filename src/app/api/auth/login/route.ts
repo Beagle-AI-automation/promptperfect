@@ -1,5 +1,5 @@
 import { checkRateLimit } from '@/lib/auth/rateLimit'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/client/supabase'
 
@@ -15,7 +15,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const email = typeof body.email === 'string' ? body.email.trim() : ''
+    const emailRawTrim =
+      typeof body.email === 'string' ? body.email.trim() : ''
+    const email = emailRawTrim.toLowerCase()
     const password = typeof body.password === 'string' ? body.password : ''
 
     if (!email || !password) {
@@ -41,6 +43,28 @@ export async function POST(request: Request) {
         password,
       })
 
+    if (authError) {
+      const ec = authError.code?.toLowerCase() ?? ''
+      const em = authError.message?.toLowerCase() ?? ''
+      if (
+        ec === 'email_not_confirmed' ||
+        ec === 'email_notconfirmed' ||
+        (em.includes('email') && em.includes('confirm')) ||
+        em.includes('email not confirmed')
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Please confirm your email before signing in. Check your inbox for the link we sent.',
+            code: 'EMAIL_NOT_CONFIRMED',
+            hint:
+              'If you did not receive it, use “Resend confirmation email” below after entering your email.',
+          },
+          { status: 403 },
+        )
+      }
+    }
+
     if (!authError && authData.session && authData.user) {
       const admin = getSupabaseAdminClient()
       if (!admin) {
@@ -49,54 +73,12 @@ export async function POST(request: Request) {
           { status: 503 }
         )
       }
-
-      let { data: row } = await admin
-        .from('pp_users')
-        .select('id, name, email, provider, model')
-        .eq('id', authData.user.id)
-        .maybeSingle()
-
-      if (!row) {
-        const { data: byEmail } = await admin
-          .from('pp_users')
-          .select('id, name, email, provider, model')
-          .eq('email', email)
-          .maybeSingle()
-        if (byEmail) {
-          row = byEmail
-        } else {
-          await admin.from('pp_users').insert({
-            id: authData.user.id,
-            name: null,
-            email,
-            password_hash: 'supabase_auth',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash',
-            api_key: '',
-          })
-          const { data: inserted } = await admin
-            .from('pp_users')
-            .select('id, name, email, provider, model')
-            .eq('id', authData.user.id)
-            .maybeSingle()
-          row = inserted
-        }
-      }
-
-      if (!row) {
-        return NextResponse.json(
-          { error: 'Invalid email or password' },
-          { status: 401 }
-        )
-      }
-
-      return NextResponse.json({
-        user: row,
-        session: {
-          access_token: authData.session.access_token,
-          refresh_token: authData.session.refresh_token,
-        },
-      })
+      return jsonLoginSuccess(
+        admin,
+        { session: authData.session, user: authData.user },
+        email,
+        emailRawTrim,
+      )
     }
 
     return NextResponse.json(

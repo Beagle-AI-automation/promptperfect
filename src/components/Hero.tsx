@@ -17,10 +17,10 @@ export function Hero() {
           
           <div className="mt-10 flex items-center justify-center gap-x-6">
             <Link
-              href="/signup"
+              href="/app"
               className="cursor-pointer rounded-md bg-[#4552FF] px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4552FF]"
             >
-              Try it now
+              Try for Free - Get Started!
             </Link>
             <a href="https://github.com/Beagle-AI-automation/promptperfect.git" target="_blank" rel="noreferrer" className="text-sm font-semibold leading-6 text-zinc-900 dark:text-zinc-100">
               View on GitHub <span aria-hidden="true">→</span>

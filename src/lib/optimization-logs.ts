@@ -8,7 +8,7 @@ export function normalizeModeForDb(mode: string): 'better' | 'specific' | 'cot' 
   return 'better';
 }
 
-const SCORE_REGEX = /---SCORE---(\d{1,3})---/;
+const SCORE_REGEX = /---SCORE---(\d{1,3})(?:---)?/;
 
 /** Parse LLM quality score (1–100) from model output, if present. */
 export function parsePromptScore(text: string): number | null {

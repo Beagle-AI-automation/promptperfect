@@ -3,22 +3,25 @@
  * Output must stay aligned with `splitOptimizedOutput` in `@/lib/delimiter`.
  */
 
-/** Shared structure so the UI can split optimized text, explanation, and changes reliably. */
+/**
+ * Shared structure so the UI can split optimized text, explanation, and changes reliably.
+ * Do not use (A)/(B) style labels here — models often echo them into the user's prompt.
+ */
 export const OUTPUT_FORMAT = `
 
-STRICT OUTPUT STRUCTURE (the app splits on these exact delimiter lines):
+STRICT OUTPUT CONTRACT (the app splits on delimiter lines below):
 
-(A) Optional first line only: ---SCORE---NN--- where NN is an integer 1–100 (quality of the final prompt). Include when possible.
+Your reply has exactly three regions in this order:
 
-(B) Then the full optimized prompt only: plain text, ready to paste into an LLM. No title line like "Optimized prompt:". Do not include ---EXPLANATION--- or ---CHANGES--- inside this block.
+• Region 1 — Only the final improved prompt: plain text to paste into another LLM. Start immediately with substantive content (context, task, constraints). Do not prefix this region with letters like (A) or (B), words like "Region 1", "Section A", "The objective:" as a fake outline label, or meta lines such as "Optimized prompt:". Do not repeat these instructions. Do not include ---EXPLANATION--- or ---CHANGES--- inside this region. Do not output ---SCORE--- or any score line.
 
-(C) Then one line exactly: ---EXPLANATION---
+• One line by itself, exactly: ---EXPLANATION---
 
-(D) Then 2–5 lines. Each line must begin with a hyphen and a space, like this example: "- Clarified the goal so …"
+• Then 2–5 lines; each line starts with "- " (hyphen space), e.g. "- Clarified the goal so …"
 
-(E) Then one line exactly: ---CHANGES---
+• One line by itself, exactly: ---CHANGES---
 
-(F) Then 2–6 lines. Each line must begin with "- " and state one concrete edit compared to the user's original (added, removed, or rephrased).
+• Then 2–6 lines; each line starts with "- " describing one concrete edit vs. the user's original.
 
 Use clear, professional wording.`;
 
@@ -40,7 +43,9 @@ Create a thorough, paragraph-based prompt that:
 
 ${OUTPUT_FORMAT}
 
-IMPORTANT: The optimized prompt should be written in detailed paragraphs, NOT bullet points or numbered lists. Make it comprehensive and thorough.`;
+IMPORTANT: The optimized prompt should be written in detailed paragraphs, NOT bullet points or numbered lists. Make it comprehensive and thorough.
+
+NEVER begin the optimized prompt with (A), (B), (C) or similar outline markers — those were only used in older docs and must not appear in the output.`;
 
 
 const SPECIFIC = `You are an expert prompt engineer. Rewrite the user's prompt to be highly specific: add audience, constraints, desired format, success criteria, edge cases, and measurable outcomes where it helps. Keep the same overall goal.${OUTPUT_FORMAT}`;

@@ -1,13 +1,18 @@
 import { validatePassword, validateEmail } from '@/lib/auth/validation'
 import { checkRateLimit } from '@/lib/auth/rateLimit'
+import { getEmailConfirmationRedirectUrl } from '@/lib/auth/oauthRedirect'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import {
+  getSupabaseUrl,
+  normalizeEnvValue,
+} from '@/lib/client/supabase'
 
 function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const url = getSupabaseUrl()
   const key =
-    process.env.SUPABASE_SERVICE_KEY?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_KEY) ||
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY)
   if (!url || !key) return null
   return createClient(url, key)
 }
@@ -40,7 +45,8 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const email = typeof body.email === 'string' ? body.email.trim() : ''
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const password = typeof body.password === 'string' ? body.password : ''
   const name = typeof body.name === 'string' ? body.name.trim() : ''
 
@@ -174,10 +180,12 @@ export async function POST(request: Request) {
     )
   }
 
+  /** Profile display_name comes from auth trigger (globally unique). Do not overwrite with plain signup name — avoids collisions. */
+
   const { data: profile } = await supabase
     .from('pp_users')
     .select('id, name, email, provider, model')
-    .eq('email', email)
+    .eq('id', uid)
     .maybeSingle()
 
   const userPayload =

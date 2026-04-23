@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "PromptPerfect — AI Prompt Optimizer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Optimize your prompts anywhere with one click",
   "permissions": ["activeTab", "storage"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

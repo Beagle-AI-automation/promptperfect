@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { validatePassword } from '@/lib/auth/validation';
+import { signInWithGoogle } from '@/lib/auth/signInWithGoogle';
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { GoogleIcon } from '@/components/auth/GoogleIcon';
@@ -14,7 +15,7 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
-import { getOAuthCallbackUrl } from '@/lib/auth/oauthRedirect';
+import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,6 +32,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingEmailConfirmation, setPendingEmailConfirmation] =
+    useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    const fromOAuth = p.get('error')?.trim();
+    if (fromOAuth) {
+      setError(decodeURIComponent(fromOAuth));
+    }
+  }, []);
 
   const passwordValidation = validatePassword(password);
   const showPasswordHints = mode === 'signup' && password.length > 0;
@@ -41,11 +55,35 @@ export default function LoginPage() {
       return;
     }
     setError('');
-    const { error: oAuthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: getOAuthCallbackUrl() },
-    });
+    setPendingEmailConfirmation(false);
+    const { error: oAuthError } = await signInWithGoogle(supabase);
     if (oAuthError) setError(oAuthError.message);
+  }
+
+  async function handleResendConfirmation() {
+    if (!supabase || !email.trim()) {
+      setError('Enter the email you signed up with above.');
+      return;
+    }
+    setError('');
+    const emailRedirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
+    const { error: resendErr } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      ...(emailRedirectTo
+        ? { options: { emailRedirectTo } }
+        : {}),
+    });
+    if (resendErr) {
+      setError(resendErr.message);
+      return;
+    }
+    setError(
+      'We sent another confirmation link. Check your inbox and spam folder.',
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,7 +101,23 @@ export default function LoginPage() {
             password,
           }),
         });
-        const data = await res.json();
+        const data = (await res.json()) as {
+          error?: string;
+          verificationRequired?: boolean;
+          email?: string;
+          message?: string;
+          user?: {
+            id: string;
+            name: string | null;
+            email: string;
+            provider?: string;
+            model?: string;
+          };
+          session?: {
+            access_token: string;
+            refresh_token: string;
+          };
+        };
         if (!res.ok) {
           setError(data.error || 'Sign up failed');
           return;
@@ -105,11 +159,28 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = await res.json();
+      const payload = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Invalid email or password');
+        const errBody = payload as {
+          error?: string;
+          code?: string;
+          hint?: string;
+        };
+        setPendingEmailConfirmation(errBody.code === 'EMAIL_NOT_CONFIRMED');
+        setError(errBody.error || 'Invalid email or password');
         return;
       }
+      setPendingEmailConfirmation(false);
+      const data = payload as {
+        session?: { access_token: string; refresh_token: string };
+        user: {
+          id: string;
+          name: string | null;
+          email: string;
+          provider: string;
+          model: string;
+        };
+      };
       if (
         supabase &&
         data.session &&
@@ -121,23 +192,17 @@ export default function LoginPage() {
           refresh_token: data.session.refresh_token,
         });
       }
-      const user = data.user as {
-        id: string;
-        name: string | null;
-        email: string;
-        provider: string;
-        model: string;
-      };
       localStorage.setItem(
         'pp_user',
         JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          provider: user.provider,
-          model: user.model,
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          provider: data.user.provider,
+          model: data.user.model,
         })
       );
+      await claimGuestHistoryAfterAuth(data.user.id);
       router.push('/app');
     } catch {
       setError('Something went wrong');
@@ -154,6 +219,8 @@ export default function LoginPage() {
           onClick={() => {
             setMode('signin');
             setError('');
+            setVerificationSent(false);
+            setPendingEmailConfirmation(false);
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signin'
@@ -168,6 +235,8 @@ export default function LoginPage() {
           onClick={() => {
             setMode('signup');
             setError('');
+            setVerificationSent(false);
+            setPendingEmailConfirmation(false);
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signup'
@@ -179,30 +248,59 @@ export default function LoginPage() {
         </button>
       </div>
 
-      <h1 className="mt-8 font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
-        {mode === 'signin' ? 'Welcome back' : 'Create your account'}
-      </h1>
-      <p className="mt-1.5 text-sm text-[#B0B0B0]">
-        {mode === 'signin'
-          ? 'Sign in to continue to PromptPerfect.'
-          : 'Start optimizing prompts in minutes.'}
-      </p>
+      {verificationSent && mode === 'signup' ? (
+        <>
+          <div
+            className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+            aria-hidden
+          >
+            ✓
+          </div>
+          <h1 className="mt-2 text-center font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
+            Check your email
+          </h1>
+          <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
+            We sent a verification link to{' '}
+            <span className="font-medium text-[#E7E6D9]">{pendingEmail}</span>.
+            After you confirm, sign in here with your password.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setVerificationSent(false);
+              setMode('signin');
+            }}
+            className={`${authPrimaryBtnClass} mt-8 w-full`}
+          >
+            Back to sign in
+          </button>
+        </>
+      ) : (
+        <>
+          <h1 className="mt-8 font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
+            {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+          </h1>
+          <p className="mt-1.5 text-sm text-[#B0B0B0]">
+            {mode === 'signin'
+              ? 'Sign in to continue to PromptPerfect.'
+              : 'Start optimizing prompts in minutes.'}
+          </p>
 
-      <button
-        type="button"
-        onClick={handleGoogle}
-        disabled={!supabase}
-        className={`${authGoogleBtnClass} mt-6`}
-      >
-        <GoogleIcon />
-        Continue with Google
-      </button>
+          <button
+            type="button"
+            onClick={handleGoogle}
+            disabled={!supabase}
+            className={`${authGoogleBtnClass} mt-6`}
+          >
+            <GoogleIcon />
+            Continue with Google
+          </button>
 
-      <div className="my-6">
-        <AuthDivider />
-      </div>
+          <div className="my-6">
+            <AuthDivider />
+          </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
         {mode === 'signup' && (
           <div>
             <label htmlFor="name" className={authLabelClass}>
@@ -278,6 +376,21 @@ export default function LoginPage() {
             {error}
           </p>
         )}
+        {pendingEmailConfirmation && mode === 'signin' && (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100/95">
+            <p className="mb-2">
+              You must confirm your email before signing in. Open the link in
+              the message from PromptPerfect (check spam).
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleResendConfirmation()}
+              className="text-sm font-medium text-[#4552FF] underline-offset-2 hover:underline"
+            >
+              Resend confirmation email
+            </button>
+          </div>
+        )}
         <button
           type="submit"
           disabled={loading || (mode === 'signup' && !passwordValidation.isValid)}
@@ -292,14 +405,21 @@ export default function LoginPage() {
               : 'Log in'}
         </button>
       </form>
+        </>
+      )}
 
-      <p className="mt-8 text-center text-sm text-[#B0B0B0]">
+      <p
+        className={`mt-8 text-center text-sm text-[#B0B0B0] ${verificationSent && mode === 'signup' ? 'hidden' : ''}`}
+      >
         {mode === 'signin' ? (
           <>
             Don&apos;t have an account?{' '}
             <button
               type="button"
-              onClick={() => setMode('signup')}
+              onClick={() => {
+                setMode('signup');
+                setVerificationSent(false);
+              }}
               className="font-medium text-[#4552FF] transition hover:text-[#6b75ff]"
             >
               Sign up
@@ -310,7 +430,10 @@ export default function LoginPage() {
             Already have an account?{' '}
             <button
               type="button"
-              onClick={() => setMode('signin')}
+              onClick={() => {
+                setMode('signin');
+                setVerificationSent(false);
+              }}
               className="font-medium text-[#4552FF] transition hover:text-[#6b75ff]"
             >
               Log in

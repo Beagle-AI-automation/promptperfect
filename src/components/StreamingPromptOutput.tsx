@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 
-const EXPLANATION_DELIMITER = "---EXPLANATION---";
-const CHANGES_DELIMITER = "---CHANGES---";
-const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
+import {
+  CHANGES_DELIMITER,
+  EXPLANATION_DELIMITER,
+  stripPromptScoreMarkers,
+} from "@/lib/delimiter";
 
 const optimizerTextarea =
   "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif] whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere";
@@ -15,7 +17,6 @@ export interface StreamingPromptOutputProps {
   text: string;
   isStreaming: boolean;
   onExplanation: (explanation: string) => void;
-  onScore?: (score: number) => void | Promise<void>;
   variant?: "default" | "optimizer";
   /** Rendered directly under the optimized textarea (optimizer variant only). */
   afterTextarea?: ReactNode;
@@ -25,7 +26,7 @@ function optimizedFromFullText(fullText: string): string {
   const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
   const before =
     explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
-  return before.replace(SCORE_PATTERN, "").trim();
+  return stripPromptScoreMarkers(before);
 }
 
 function explanationFromFullText(fullText: string): string {
@@ -40,12 +41,10 @@ export function StreamingPromptOutput({
   text,
   isStreaming,
   onExplanation,
-  onScore,
   variant = "default",
   afterTextarea,
 }: StreamingPromptOutputProps) {
   const lastExplRef = useRef("");
-  const lastScoreRef = useRef<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   const optimized = useMemo(() => optimizedFromFullText(text), [text]);
@@ -57,16 +56,6 @@ export function StreamingPromptOutput({
       onExplanation(explanation);
     }
   }, [explanation, onExplanation]);
-
-  useEffect(() => {
-    if (!onScore) return;
-    const m = text.match(SCORE_PATTERN);
-    if (!m) return;
-    const score = parseInt(m[1], 10);
-    if (Number.isNaN(score) || score === lastScoreRef.current) return;
-    lastScoreRef.current = score;
-    void onScore(score);
-  }, [text, onScore]);
 
   const handleCopy = async () => {
     if (!optimized.trim()) return;

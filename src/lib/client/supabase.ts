@@ -2,14 +2,27 @@ import { createBrowserClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let cached: SupabaseClient | null = null;
-let adminCached: SupabaseClient | null = null;
+let adminCache: { key: string; client: SupabaseClient } | null = null;
 
-function getSupabaseUrl(): string | null {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()?.replace(/\/$/, '') ||
-    process.env.SUPABASE_URL?.trim()?.replace(/\/$/, '') ||
-    null
-  );
+/** Trim and strip optional surrounding quotes from .env values (common mis-copy). */
+export function normalizeEnvValue(value: string | undefined): string {
+  if (!value) return '';
+  let v = value.trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+export function getSupabaseUrl(): string | null {
+  const raw =
+    normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_URL) ||
+    normalizeEnvValue(process.env.SUPABASE_URL);
+  if (!raw) return null;
+  return raw.replace(/\/$/, '');
 }
 
 /**
@@ -18,7 +31,7 @@ function getSupabaseUrl(): string | null {
  */
 export function getSupabaseClient(): SupabaseClient | null {
   const url = getSupabaseUrl();
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const anonKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   if (!url || !anonKey) {
     if (typeof window !== 'undefined') {
@@ -43,15 +56,18 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 /** Server-only: uses service role key, bypasses RLS. Use for trusted server operations. */
 export function getSupabaseAdminClient(): SupabaseClient | null {
-  if (adminCached) return adminCached;
-
   const url = getSupabaseUrl();
   const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.SUPABASE_SERVICE_KEY?.trim();
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY) ||
+    normalizeEnvValue(process.env.SUPABASE_SERVICE_KEY);
   if (!url || !serviceRoleKey) return null;
 
-  adminCached = createClient(url, serviceRoleKey);
-  return adminCached;
+  if (adminCache?.key === serviceRoleKey) return adminCache.client;
+
+  adminCache = {
+    key: serviceRoleKey,
+    client: createClient(url, serviceRoleKey),
+  };
+  return adminCache.client;
 }
 

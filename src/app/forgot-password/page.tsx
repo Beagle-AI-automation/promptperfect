@@ -1,45 +1,64 @@
-'use client'
+'use client';
 
-import { useMemo, useState } from 'react'
-import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
-import { AuthShell } from '@/components/auth/AuthShell'
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { AuthShell } from '@/components/auth/AuthShell';
 import {
   authInputClass,
   authLabelClass,
   authPrimaryBtnClass,
-} from '@/components/auth/auth-styles'
+} from '@/components/auth/auth-styles';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !key) return null
-    return createBrowserClient(url, key)
-  }, [])
+  const configured = useMemo(() => {
+    return Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    );
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    if (!supabase) {
-      setError('Supabase is not configured')
-      return
+    e.preventDefault();
+    setError('');
+    if (!configured) {
+      setError('Supabase is not configured');
+      return;
     }
-    setLoading(true)
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset`,
-    })
-    setLoading(false)
-    if (err) {
-      setError(err.message)
-      return
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter your email address');
+      return;
     }
-    setSent(true)
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        hint?: string;
+        code?: string;
+      };
+
+      if (!res.ok) {
+        const parts = [data.error || 'Something went wrong'];
+        if (data.hint) parts.push(data.hint);
+        setError(parts.join(' '));
+        return;
+      }
+
+      setSent(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -56,7 +75,8 @@ export default function ForgotPasswordPage() {
             Reset your password
           </h1>
           <p className="mt-1.5 text-sm text-[#B0B0B0]">
-            Enter your email and we&apos;ll send you a reset link.
+            Enter your email and we&apos;ll send you a reset link if you have an
+            account.
           </p>
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <div>
@@ -101,7 +121,8 @@ export default function ForgotPasswordPage() {
           </h1>
           <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
             We sent a password reset link to{' '}
-            <span className="font-medium text-[#E7E6D9]">{email}</span>
+            <span className="font-medium text-[#E7E6D9]">{email.trim()}</span>.
+            Open it to choose a new password (link expires after a while).
           </p>
           <Link
             href="/login"
@@ -112,5 +133,5 @@ export default function ForgotPasswordPage() {
         </>
       )}
     </AuthShell>
-  )
+  );
 }
