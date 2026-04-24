@@ -1,5 +1,4 @@
-import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
-import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import { getSupabaseClient } from '@/lib/client/supabase';
 import {
   CHANGES_DELIMITER,
   EXPLANATION_DELIMITER,

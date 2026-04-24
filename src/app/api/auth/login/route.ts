@@ -1,5 +1,6 @@
 import { checkRateLimit } from '@/lib/auth/rateLimit'
-import { createClient, type Session, type User } from '@supabase/supabase-js'
+import { jsonLoginSuccess } from '@/lib/auth/jsonLoginSuccess'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/client/supabase'
 

@@ -1,7 +1,10 @@
 'use client';
 
+import type { MouseEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { getSupabaseClient } from '@/lib/client/supabase';
+import { Plus } from 'lucide-react';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
 import {
   getLocalHistoryForSession,
   getOrCreateSessionId,
@@ -65,7 +68,17 @@ export function HistoryPanel({
 
   const load = useCallback(async () => {
     const client = createSupabaseBrowserClient();
-    const uid = userId?.trim();
+    const sid =
+      userId?.trim() ||
+      historySessionId?.trim() ||
+      getOrCreateSessionId() ||
+      '';
+
+    if (!sid) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {

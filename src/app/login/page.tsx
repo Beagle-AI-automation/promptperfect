@@ -129,18 +129,15 @@ export default function LoginPage() {
           provider: string;
           model: string;
         };
-        if (
-          supabase &&
-          data.session &&
         if (data.verificationRequired) {
           setPendingEmail(data.email ?? email.trim());
           setVerificationSent(true);
           return;
         }
         if (
+          supabase &&
           data.session &&
           data.user &&
-          supabase &&
           typeof data.session.access_token === 'string' &&
           typeof data.session.refresh_token === 'string'
         ) {
