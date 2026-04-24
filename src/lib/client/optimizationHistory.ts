@@ -1,18 +1,20 @@
-import { getSupabaseClient } from '@/lib/client/supabase';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import {
+  CHANGES_DELIMITER,
+  EXPLANATION_DELIMITER,
+  stripPromptScoreMarkers,
+} from '@/lib/delimiter';
 
 const SESSION_STORAGE_KEY = 'pp:optimization_session_id';
 const LOCAL_HISTORY_KEY = 'pp:optimization_history_local';
 const LOCAL_HISTORY_CAP = 100;
 
-const EXPLANATION_DELIMITER = '---EXPLANATION---';
-const CHANGES_DELIMITER = '---CHANGES---';
-const SCORE_PATTERN = /---SCORE---(\d{1,3})---/;
-
 /** Parse full optimize API / stream text into optimized prompt (matches StreamingPromptOutput). */
 export function optimizedTextFromFullCompletion(fullText: string): string {
   const explIdx = fullText.indexOf(EXPLANATION_DELIMITER);
   const before = explIdx !== -1 ? fullText.slice(0, explIdx) : fullText;
-  return before.replace(SCORE_PATTERN, '').trim();
+  return stripPromptScoreMarkers(before);
 }
 
 /** Parse explanation segment from full optimize stream/sync text. */
@@ -113,6 +115,16 @@ export async function saveToHistory(params: {
   prompt_optimized: string;
   mode: string;
   explanation: string;
+  /**
+   * Scope rows to this session id. Guests should pass `getGuestId()` so history can be
+   * merged into the signed-in session via `/api/auth/claim-guest-history`.
+   */
+  sessionId?: string;
+  /** When signed in, links the row to the account for profile stats. */
+  userId?: string;
+  provider?: string;
+  /** Same id sent to `/api/optimize` as `session_id` — matches `optimization_logs.session_id` for feedback. */
+  optimizeSessionId?: string;
 }): Promise<string | null> {
   const session_id = getOrCreateSessionId();
   if (!session_id) return null;

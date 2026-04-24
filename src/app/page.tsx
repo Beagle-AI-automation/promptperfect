@@ -73,10 +73,10 @@ export default function Page() {
           </div>
 
           <Link
-            href="/signup"
+            href="/app"
             className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 active:scale-[0.98] sm:mt-12"
           >
-            Try it now
+            Try for Free - Get Started!
           </Link>
         </section>
 
