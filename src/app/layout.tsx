@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
-import { RootErrorBoundary } from "@/components/RootErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
@@ -43,9 +42,7 @@ export default function RootLayout({
         className={`${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
         suppressHydrationWarning
       >
-        <RootErrorBoundary>
-          <ThemeProvider>{children}</ThemeProvider>
-        </RootErrorBoundary>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

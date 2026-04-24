@@ -3,6 +3,15 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdminClient } from '@/lib/client/supabase'
 
+async function sha256Hex(text: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(text)
+  const hash = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 export async function POST(request: Request) {
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -99,10 +108,51 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json(
-      { error: 'Invalid email or password' },
-      { status: 401 }
-    )
+    const admin = getSupabaseAdminClient()
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      )
+    }
+
+    const { data: user, error } = await admin
+      .from('pp_users')
+      .select('id, name, email, password_hash, provider, model')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (error || !user) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    if (user.password_hash === 'supabase_auth') {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    const inputHash = await sha256Hex(password)
+    if (inputHash !== user.password_hash) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    return NextResponse.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        provider: user.provider,
+        model: user.model,
+      },
+    })
   } catch {
     return NextResponse.json(
       { error: 'Invalid request' },
