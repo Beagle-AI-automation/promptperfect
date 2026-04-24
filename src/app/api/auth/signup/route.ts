@@ -17,6 +17,23 @@ function getServiceSupabase() {
   return createClient(url, key)
 }
 
+function looksLikeDuplicateAuthError(message: string): boolean {
+  return /already\s*registered|already\s*exists|user\s*already|duplicate|unique/i.test(
+    message,
+  )
+}
+
+function clarifySignupError(message: string): string {
+  if (message.includes('Database error creating new user')) {
+    return (
+      'Could not create your account (auth database error). ' +
+      'If this keeps happening, open Supabase Dashboard → Database and check for triggers ' +
+      'on auth.users that insert into public tables; fix or remove the broken trigger.'
+    )
+  }
+  return message
+}
+
 export async function POST(request: Request) {
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -41,48 +58,110 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validation.errors[0] }, { status: 400 })
   }
 
-  const url = getSupabaseUrl()
-  const anonKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  if (!url || !anonKey) {
+  const supabase = getServiceSupabase()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+
+  if (!supabase || !url || !anonKey) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   }
 
-  /** Required so confirmation emails redirect to `/auth/callback` (must be allowlisted). */
-  const emailRedirectTo = getEmailConfirmationRedirectUrl(request)
+  const { data: existingRow } = await supabase
+    .from('pp_users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
 
-  const anon = createClient(url, anonKey)
-  const { data: signUpData, error: signUpErr } = await anon.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo,
-      ...(name ? { data: { full_name: name, name } } : {}),
-    },
-  })
-
-  if (signUpErr) {
-    const msg = signUpErr.message || 'Sign up failed'
-    const dbNewUser = /database error creating new user/i.test(msg)
+  if (existingRow) {
     return NextResponse.json(
       {
-        error: msg,
-        ...(dbNewUser && {
-          hint:
-            'Your Supabase auth trigger could not insert into pp_user_profiles (usually RLS). In Supabase → SQL Editor, run section 5 of supabase/run-all.sql, or migrations 20250407100000_fix_handle_new_user_rls.sql and 20250408100000_handle_new_user_owner.sql from this repo.',
-        }),
+        error:
+          'An account with this email already exists. Try signing in instead.',
       },
-      { status: 400 },
+      { status: 409 },
     )
   }
 
-  const uid = signUpData.user?.id
-  if (!uid) {
-    return NextResponse.json({ error: 'Sign up failed' }, { status: 400 })
+  let uid: string | undefined
+  let authUser:
+    | { id: string; email?: string | null }
+    | undefined
+
+  const adminResult = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      name: name || undefined,
+      full_name: name || undefined,
+    },
+  })
+
+  if (!adminResult.error && adminResult.data.user) {
+    uid = adminResult.data.user.id
+    authUser = adminResult.data.user
+  } else {
+    const adminMsg = adminResult.error?.message ?? ''
+    if (looksLikeDuplicateAuthError(adminMsg)) {
+      return NextResponse.json(
+        {
+          error:
+            'An account with this email already exists. Try signing in instead.',
+        },
+        { status: 409 },
+      )
+    }
+
+    const anon = createClient(url, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    const signUpRes = await anon.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name || undefined,
+          full_name: name || undefined,
+        },
+      },
+    })
+
+    if (signUpRes.error) {
+      const sm = signUpRes.error.message ?? ''
+      if (looksLikeDuplicateAuthError(sm)) {
+        return NextResponse.json(
+          {
+            error:
+              'An account with this email already exists. Try signing in instead.',
+          },
+          { status: 409 },
+        )
+      }
+      const primary = clarifySignupError(adminMsg || sm)
+      return NextResponse.json(
+        { error: primary || sm || 'Sign up failed' },
+        { status: 400 },
+      )
+    }
+
+    if (!signUpRes.data.user) {
+      return NextResponse.json({ error: 'Sign up failed' }, { status: 500 })
+    }
+
+    uid = signUpRes.data.user.id
+    authUser = signUpRes.data.user
+
+    const { error: confirmErr } = await supabase.auth.admin.updateUserById(uid, {
+      email_confirm: true,
+    })
+    if (confirmErr) {
+      console.error('[signup] updateUserById after signUp:', confirmErr.message)
+    }
   }
 
-  const supabase = getServiceSupabase()
-  if (!supabase) {
-    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+  if (!uid) {
+    return NextResponse.json({ error: 'Sign up failed' }, { status: 500 })
   }
 
   const { error: insertErr } = await supabase.from('pp_users').insert({
@@ -109,44 +188,42 @@ export async function POST(request: Request) {
     .eq('id', uid)
     .maybeSingle()
 
-  const userPayload = profile ?? {
-    id: uid,
-    name: name || null,
-    email,
-    provider: 'gemini',
-    model: 'gemini-2.0-flash',
+  const userPayload =
+    profile ??
+    (authUser
+      ? {
+          id: authUser.id,
+          name: name || null,
+          email: authUser.email ?? email,
+          provider: 'gemini' as const,
+          model: 'gemini-2.0-flash' as const,
+        }
+      : null)
+
+  if (!userPayload) {
+    return NextResponse.json(
+      { error: 'Account created but profile could not be loaded' },
+      { status: 500 },
+    )
   }
 
-  /**
-   * Only return a session when the address is verified. (Supabase should not
-   * return a session if “Confirm email” is on; this is a safety net if the
-   * project has that option disabled.)
-   */
-  const authUser = signUpData.user
-  if (signUpData.session && authUser) {
-    if (authUser.email_confirmed_at) {
-      return NextResponse.json({
-        verificationRequired: false,
-        email,
-        user: userPayload,
-        session: {
-          access_token: signUpData.session.access_token,
-          refresh_token: signUpData.session.refresh_token,
-        },
-      })
+  const authClient = createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  let session: { access_token: string; refresh_token: string } | undefined
+  const { data: signInData, error: signInErr } =
+    await authClient.auth.signInWithPassword({ email, password })
+  if (!signInErr && signInData.session) {
+    session = {
+      access_token: signInData.session.access_token,
+      refresh_token: signInData.session.refresh_token,
     }
-    return NextResponse.json({
-      verificationRequired: true,
-      email,
-      message:
-        'Check your email to verify your account, then sign in with your password.',
-    })
+  } else if (signInErr) {
+    console.error('[signup] signInWithPassword after signup:', signInErr.message)
   }
 
   return NextResponse.json({
-    verificationRequired: true,
-    email,
-    message:
-      'Check your email to verify your account, then sign in with your password.',
+    user: userPayload,
+    ...(session ? { session } : {}),
   })
 }

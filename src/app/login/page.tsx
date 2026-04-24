@@ -122,15 +122,22 @@ export default function LoginPage() {
           setError(data.error || 'Sign up failed');
           return;
         }
+        const user = data.user as {
+          id: string;
+          name: string | null;
+          email: string;
+          provider: string;
+          model: string;
+        };
         if (data.verificationRequired) {
           setPendingEmail(data.email ?? email.trim());
           setVerificationSent(true);
           return;
         }
         if (
+          supabase &&
           data.session &&
           data.user &&
-          supabase &&
           typeof data.session.access_token === 'string' &&
           typeof data.session.refresh_token === 'string'
         ) {
@@ -138,21 +145,18 @@ export default function LoginPage() {
             access_token: data.session.access_token,
             refresh_token: data.session.refresh_token,
           });
-          localStorage.setItem(
-            'pp_user',
-            JSON.stringify({
-              id: data.user.id,
-              name: data.user.name,
-              email: data.user.email,
-              provider: data.user.provider ?? 'gemini',
-              model: data.user.model ?? 'gemini-2.0-flash',
-            }),
-          );
-          await claimGuestHistoryAfterAuth(data.user.id);
-          router.push('/control-room');
-          return;
         }
-        setError('Unexpected signup response');
+        localStorage.setItem(
+          'pp_user',
+          JSON.stringify({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            provider: user.provider ?? 'gemini',
+            model: user.model ?? 'gemini-2.0-flash',
+          })
+        );
+        router.push('/control-room');
         return;
       }
 

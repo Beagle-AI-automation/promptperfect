@@ -31,6 +31,7 @@ export default function ControlRoomPage() {
   const [verifyStep, setVerifyStep] = useState(0);
   const [verifyRunning, setVerifyRunning] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [continueError, setContinueError] = useState('');
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function ControlRoomPage() {
           return;
         }
         if (u.provider) setProvider(u.provider as Provider);
+        setContinueError('');
       } catch {
         router.replace('/signup');
       }
@@ -88,8 +90,9 @@ export default function ControlRoomPage() {
   const handleContinue = async () => {
     if (!user) return;
     setSaving(true);
+    setContinueError('');
     try {
-      await fetch('/api/auth/update-user', {
+      const res = await fetch('/api/auth/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,6 +102,15 @@ export default function ControlRoomPage() {
           api_key: provider !== 'gemini' ? apiKey : '',
         }),
       });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setContinueError(
+          typeof payload.error === 'string' && payload.error.trim()
+            ? payload.error
+            : 'Could not save your settings',
+        );
+        return;
+      }
       const updated = {
         ...JSON.parse(localStorage.getItem('pp_user') || '{}'),
         provider,
@@ -118,7 +130,7 @@ export default function ControlRoomPage() {
       }
       router.push('/app');
     } catch {
-      setSaving(false);
+      setContinueError('Something went wrong. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -145,7 +157,10 @@ export default function ControlRoomPage() {
             <button
               key={p}
               type="button"
-              onClick={() => setProvider(p)}
+              onClick={() => {
+                setProvider(p);
+                setContinueError('');
+              }}
               className={`rounded-xl border-2 bg-zinc-900/80 p-4 text-left transition ${
                 provider === p
                   ? 'border-[#4552FF] shadow-[0_0_16px_rgba(69,82,255,0.33)]'
@@ -162,6 +177,12 @@ export default function ControlRoomPage() {
             </button>
           ))}
         </div>
+
+        {continueError && (
+          <p className="mt-6 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {continueError}
+          </p>
+        )}
 
         {provider === 'gemini' ? (
           <div className="mt-8 rounded-xl border border-zinc-700 bg-zinc-900/50 p-6">

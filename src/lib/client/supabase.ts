@@ -1,3 +1,4 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let cached: SupabaseClient | null = null;
@@ -24,9 +25,11 @@ export function getSupabaseUrl(): string | null {
   return raw.replace(/\/$/, '');
 }
 
+/**
+ * Browser-only client that shares auth storage with login (createBrowserClient).
+ * Use for history, logs, and other client-side reads/writes under RLS.
+ */
 export function getSupabaseClient(): SupabaseClient | null {
-  if (cached) return cached;
-
   const url = getSupabaseUrl();
   const anonKey = normalizeEnvValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -41,7 +44,13 @@ export function getSupabaseClient(): SupabaseClient | null {
     return null;
   }
 
-  cached = createClient(url, anonKey);
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  if (!cached) {
+    cached = createBrowserClient(url, anonKey);
+  }
   return cached;
 }
 

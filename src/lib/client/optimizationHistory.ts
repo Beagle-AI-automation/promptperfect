@@ -1,5 +1,4 @@
-import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
-import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import { getSupabaseClient } from '@/lib/client/supabase';
 import {
   CHANGES_DELIMITER,
   EXPLANATION_DELIMITER,
@@ -7,6 +6,8 @@ import {
 } from '@/lib/delimiter';
 
 const SESSION_STORAGE_KEY = 'pp:optimization_session_id';
+const LOCAL_HISTORY_KEY = 'pp:optimization_history_local';
+const LOCAL_HISTORY_CAP = 100;
 
 /** Parse full optimize API / stream text into optimized prompt (matches StreamingPromptOutput). */
 export function optimizedTextFromFullCompletion(fullText: string): string {
@@ -46,96 +47,66 @@ export function getOrCreateSessionId(): string {
   }
 }
 
-function isMissingColumnError(message: string): boolean {
-  return /optimize_session_id|provider|schema cache|could not find|column.*does not exist|PGRST204/i.test(
-    message,
-  );
-}
-
-function logHistoryDev(message: string, detail?: string) {
-  if (process.env.NODE_ENV === 'development') {
-    console.warn(`[saveToHistory] ${message}`, detail ?? '');
-  }
-}
-
-async function insertHistoryRow(
-  client: ReturnType<typeof createSupabaseBrowserClient>,
-  row: Record<string, unknown>,
-): Promise<string | null> {
-  if (!client) return null;
-
-  const runInsert = async (payload: Record<string, unknown>) => {
-    const { data, error } = await client
-      .from('pp_optimization_history')
-      .insert(payload)
-      .select('id');
-
-    if (error) return { error: error.message, id: null as string | null };
-    const id = Array.isArray(data) && data[0] && typeof data[0].id === 'string'
-      ? data[0].id
-      : null;
-    return { error: null as string | null, id };
-  };
-
-  let payload: Record<string, unknown> = { ...row };
-  let result = await runInsert(payload);
-
-  if (result.error && isMissingColumnError(result.error) && 'optimize_session_id' in payload) {
-    logHistoryDev('retry without optimize_session_id', result.error);
-    const rest = { ...payload };
-    delete rest.optimize_session_id;
-    payload = rest;
-    result = await runInsert(payload);
-  }
-
-  if (result.error && isMissingColumnError(result.error) && 'provider' in payload) {
-    logHistoryDev('retry without provider', result.error);
-    const rest = { ...payload };
-    delete rest.provider;
-    payload = rest;
-    result = await runInsert(payload);
-  }
-
-  if (result.error) {
-    logHistoryDev('insert failed', result.error);
-    return null;
-  }
-  return result.id;
-}
-
-async function saveHistoryViaApi(params: {
+export type LocalHistoryRow = {
+  id: string;
+  session_id: string;
   prompt_original: string;
   prompt_optimized: string;
   mode: string;
   explanation: string;
-  session_id: string;
-  optimize_session_id?: string;
-  provider?: string;
-}): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  const client = createSupabaseBrowserClient();
-  if (!client) return null;
+  created_at: string;
+};
+
+function readLocalHistoryRows(): LocalHistoryRow[] {
+  if (typeof window === 'undefined') return [];
   try {
-    const headers = await getPromptPerfectAuthHeaders(client);
-    if (!headers) return null;
-    const res = await fetch('/api/history', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
-    const data = (await res.json().catch(() => ({}))) as {
-      id?: string;
-      error?: string;
-    };
-    if (!res.ok || !data.id) {
-      logHistoryDev('API fallback failed', data.error ?? String(res.status));
-      return null;
-    }
-    return data.id;
-  } catch (e) {
-    logHistoryDev('API fallback threw', e instanceof Error ? e.message : String(e));
-    return null;
+    const raw = localStorage.getItem(LOCAL_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as LocalHistoryRow[]) : [];
+  } catch {
+    return [];
   }
+}
+
+function writeLocalHistoryRows(rows: LocalHistoryRow[]) {
+  localStorage.setItem(
+    LOCAL_HISTORY_KEY,
+    JSON.stringify(rows.slice(0, LOCAL_HISTORY_CAP)),
+  );
+}
+
+function saveToLocalHistory(
+  params: {
+    prompt_original: string;
+    prompt_optimized: string;
+    mode: string;
+    explanation: string;
+  },
+  session_id: string,
+): string {
+  const id =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? `local-${crypto.randomUUID()}`
+      : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const item: LocalHistoryRow = {
+    id,
+    session_id,
+    prompt_original: params.prompt_original,
+    prompt_optimized: params.prompt_optimized,
+    mode: params.mode,
+    explanation: params.explanation,
+    created_at: new Date().toISOString(),
+  };
+  const list = readLocalHistoryRows();
+  list.unshift(item);
+  writeLocalHistoryRows(list);
+  return id;
+}
+
+/** Client-side fallback when Supabase insert fails or is unavailable. */
+export function getLocalHistoryForSession(sessionId: string): LocalHistoryRow[] {
+  return readLocalHistoryRows().filter((r) => r.session_id === sessionId);
 }
 
 export async function saveToHistory(params: {
@@ -154,42 +125,40 @@ export async function saveToHistory(params: {
   /** Same id sent to `/api/optimize` as `session_id` — matches `optimization_logs.session_id` for feedback. */
   optimizeSessionId?: string;
 }): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  const client = createSupabaseBrowserClient();
-  if (!client) return null;
-
-  const session_id =
-    params.sessionId?.trim() || getOrCreateSessionId();
+  const session_id = getOrCreateSessionId();
   if (!session_id) return null;
 
-  const row: Record<string, unknown> = {
-    session_id,
-    prompt_original: params.prompt_original,
-    prompt_optimized: params.prompt_optimized,
-    mode: params.mode,
-    explanation: params.explanation,
-  };
-  if (params.userId?.trim()) row.user_id = params.userId.trim();
-  if (params.provider?.trim()) row.provider = params.provider.trim();
-  if (params.optimizeSessionId?.trim()) {
-    row.optimize_session_id = params.optimizeSessionId.trim();
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from('pp_optimization_history')
+        .insert({
+          session_id,
+          prompt_original: params.prompt_original,
+          prompt_optimized: params.prompt_optimized,
+          mode: params.mode,
+          explanation: params.explanation,
+        })
+        .select('id')
+        .single();
+
+      if (!error && data?.id) {
+        return data.id;
+      }
+      if (error && typeof window !== 'undefined') {
+        console.warn(
+          '[PromptPerfect] History save to Supabase failed:',
+          error.message,
+        );
+      }
+    } catch (e) {
+      if (typeof window !== 'undefined') {
+        console.warn('[PromptPerfect] History save error:', e);
+      }
+    }
   }
 
-  let id = await insertHistoryRow(client, row);
-
-  if (!id && params.userId?.trim()) {
-    id = await saveHistoryViaApi({
-      prompt_original: params.prompt_original,
-      prompt_optimized: params.prompt_optimized,
-      mode: params.mode,
-      explanation: params.explanation,
-      session_id,
-      ...(params.optimizeSessionId?.trim()
-        ? { optimize_session_id: params.optimizeSessionId.trim() }
-        : {}),
-      ...(params.provider?.trim() ? { provider: params.provider.trim() } : {}),
-    });
-  }
-
-  return id;
+  if (typeof window === 'undefined') return null;
+  return saveToLocalHistory(params, session_id);
 }

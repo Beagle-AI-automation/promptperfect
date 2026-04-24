@@ -1,15 +1,14 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-  type MouseEvent,
-} from 'react';
+import type { MouseEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
-import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
+import {
+  getLocalHistoryForSession,
+  getOrCreateSessionId,
+} from '@/lib/client/optimizationHistory';
 
 export interface OptimizationHistoryItem {
   id: string;
@@ -69,70 +68,31 @@ export function HistoryPanel({
 
   const load = useCallback(async () => {
     const client = createSupabaseBrowserClient();
-    const uid = userId?.trim();
+    const sid =
+      userId?.trim() ||
+      historySessionId?.trim() ||
+      getOrCreateSessionId() ||
+      '';
+
+    if (!sid) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
+      const localRows = getLocalHistoryForSession(sid);
       if (!client) {
-        setRows([]);
+        const merged = [...localRows].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setRows(merged.slice(0, 20));
         return;
       }
 
-      if (uid) {
-        const headers = await getPromptPerfectAuthHeaders(client);
-        if (headers) {
-          const res = await fetch('/api/history', { headers });
-          const payload = (await res.json().catch(() => ({}))) as {
-            items?: OptimizationHistoryItem[];
-            error?: string;
-          };
-          if (res.ok && Array.isArray(payload.items)) {
-            setRows(payload.items);
-            return;
-          }
-        }
-
-        const selFull =
-          'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at';
-        const selLegacy =
-          'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at';
-
-        const qFull = await client
-          .from('pp_optimization_history')
-          .select(selFull)
-          .eq('user_id', uid)
-          .order('created_at', { ascending: false })
-          .limit(20);
-
-        if (
-          qFull.error &&
-          /optimize_session_id|schema cache|could not find/i.test(
-            qFull.error.message,
-          )
-        ) {
-          const qLeg = await client
-            .from('pp_optimization_history')
-            .select(selLegacy)
-            .eq('user_id', uid)
-            .order('created_at', { ascending: false })
-            .limit(20);
-          if (qLeg.error) throw qLeg.error;
-          setRows((qLeg.data as OptimizationHistoryItem[]) ?? []);
-          return;
-        }
-
-        if (qFull.error) throw qFull.error;
-        setRows((qFull.data as OptimizationHistoryItem[]) ?? []);
-        return;
-      }
-
-      const sid = historySessionId?.trim() || getOrCreateSessionId();
-      if (!sid) {
-        setRows([]);
-        return;
-      }
-
-      const qGuestFull = await client
+      const { data, error } = await client
         .from('pp_optimization_history')
         .select(
           'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
@@ -141,28 +101,20 @@ export function HistoryPanel({
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (
-        qGuestFull.error &&
-        /optimize_session_id|schema cache|could not find/i.test(
-          qGuestFull.error.message,
-        )
-      ) {
-        const qGuestLeg = await client
-          .from('pp_optimization_history')
-          .select(
-            'id,session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
-          )
-          .eq('session_id', sid)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        if (qGuestLeg.error) throw qGuestLeg.error;
-        setRows((qGuestLeg.data as OptimizationHistoryItem[]) ?? []);
-      } else {
-        if (qGuestFull.error) throw qGuestFull.error;
-        setRows((qGuestFull.data as OptimizationHistoryItem[]) ?? []);
-      }
+      if (error) throw error;
+      const remote = (data as OptimizationHistoryItem[]) ?? [];
+      const merged = [...remote, ...localRows].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      setRows(merged.slice(0, 20));
     } catch {
-      setRows([]);
+      const localRows = getLocalHistoryForSession(sid);
+      const merged = [...localRows].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      setRows(merged.slice(0, 20));
     } finally {
       setLoading(false);
     }
