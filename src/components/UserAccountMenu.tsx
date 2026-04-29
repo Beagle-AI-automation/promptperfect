@@ -13,7 +13,7 @@ import { fetchProfileFromApi } from '@/lib/client/userProfile';
 
 interface UserAccountMenuProps {
   userId: string;
-  /** Used before / until profile loads (e.g. `pp_user.name` or email local part). */
+  /** Used before / until profile loads (e.g. display name from session metadata or email local part). */
   fallbackDisplayName: string;
   onLogout: () => void;
 }

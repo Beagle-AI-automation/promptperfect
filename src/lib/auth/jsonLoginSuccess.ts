@@ -5,7 +5,7 @@ import type { getSupabaseAdminClient } from '@/lib/client/supabase'
 type AdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>
 
 /**
- * After Supabase password sign-in succeeds: ensure `pp_users` row exists and return API JSON.
+ * After Supabase password sign-in succeeds: ensure the app users row exists and return API JSON.
  */
 export async function jsonLoginSuccess(
   admin: AdminClient,

@@ -41,7 +41,7 @@ function browserClient(): SupabaseClient | null {
 
 /**
  * Load profile + dashboard stats in one request (preferred on `/profile`).
- * Uses `/api/profile` so app login (`pp_user` headers + service role) works with RLS.
+ * Uses `/api/profile` with session Bearer + matching user headers and service role where configured.
  */
 export async function fetchProfileFromApi(
   supabase: SupabaseClient | null = browserClient(),

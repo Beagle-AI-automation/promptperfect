@@ -4,9 +4,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Bookmark, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getSupabaseClient } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import {
+  buildAppUserFromSupabaseUser,
+  readEnginePrefs,
+} from '@/lib/client/enginePrefsStorage';
+import { resolveAuthUserAndSession } from '@/lib/client/ppUserSync';
 
-const PP_USER_KEY = 'pp_user';
 const REOPTIMIZE_SESSION_KEY = 'pp_reoptimize';
 const PREVIEW_LEN = 120;
 
@@ -103,7 +107,7 @@ export default function LibraryPage() {
   );
 
   const loadSaved = useCallback(async (userId: string) => {
-    const client = getSupabaseClient();
+    const client = createSupabaseBrowserClient();
     if (!client) {
       setError('Library is unavailable.');
       setRows([]);
@@ -139,7 +143,7 @@ export default function LibraryPage() {
       setRows((r) => r.filter((row) => row.id !== id));
       setExpandedId((prev) => (prev === id ? null : prev));
 
-      const client = getSupabaseClient();
+      const client = createSupabaseBrowserClient();
       if (!client) {
         setError('Library is unavailable.');
         void loadSaved(user.id);
@@ -184,29 +188,32 @@ export default function LibraryPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    try {
-      const raw = localStorage.getItem(PP_USER_KEY);
-      if (!raw) {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      setUser(null);
+      setRows([]);
+      setLoading(false);
+      setAuthReady(true);
+      return;
+    }
+    let cancelled = false;
+    void resolveAuthUserAndSession(client).then(({ user }) => {
+      if (cancelled) return;
+      if (!user?.id) {
         setUser(null);
+        setRows([]);
         setLoading(false);
         setAuthReady(true);
         return;
       }
-      const u = JSON.parse(raw) as PPUser;
-      if (!u?.id) {
-        setUser(null);
-        setLoading(false);
-        setAuthReady(true);
-        return;
-      }
+      const u = buildAppUserFromSupabaseUser(user, readEnginePrefs()) as PPUser;
       setUser(u);
       void loadSaved(u.id);
       setAuthReady(true);
-    } catch {
-      setUser(null);
-      setLoading(false);
-      setAuthReady(true);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [mounted, loadSaved]);
 
   if (!mounted || !authReady) {

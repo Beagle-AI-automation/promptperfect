@@ -15,6 +15,7 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
+import { writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -104,16 +105,10 @@ export default function SignUpPage() {
           refresh_token: data.session.refresh_token,
         });
       }
-      localStorage.setItem(
-        'pp_user',
-        JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          provider: user.provider ?? 'gemini',
-          model: user.model ?? 'gemini-2.0-flash',
-        })
-      );
+      writeEnginePrefs({
+        provider: user.provider ?? 'gemini',
+        model: user.model ?? 'gemini-2.0-flash',
+      });
       router.push('/control-room');
     } catch {
       setError('Something went wrong');

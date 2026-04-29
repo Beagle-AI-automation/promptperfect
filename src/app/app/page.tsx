@@ -1,5 +1,6 @@
 'use client';
 
+import type { User } from '@supabase/supabase-js';
 import { useCompletion } from '@ai-sdk/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -33,8 +34,13 @@ import type { OptimizationMode, Provider } from '@/lib/types';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
 import {
+  buildAppUserFromSupabaseUser,
+  readEnginePrefs,
+} from '@/lib/client/enginePrefsStorage';
+import {
   clearPromptPerfectLocalAuth,
-  syncPpUserFromAuthSession,
+  persistEnginePrefsFromAuthUser,
+  resolveAuthUserAndSession,
 } from '@/lib/client/ppUserSync';
 import { readStatsBarCache } from '@/lib/client/statsBarCache';
 import { userFacingOptimizeError } from '@/lib/optimizeUserError';
@@ -242,53 +248,47 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    const id = setTimeout(() => {
-      try {
-        const raw = localStorage.getItem('pp_user');
-        if (!raw) {
-          setUser(null);
-          setProvider('gemini');
-          setApiKey('');
-          setHydrated(true);
-          return;
-        }
-        const u = JSON.parse(raw) as PPUser;
-        setUser(u);
-        setProvider((u.provider as Provider) || 'gemini');
-        setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
-        setHydrated(true);
-      } catch {
-        setUser(null);
-        setProvider('gemini');
-        setApiKey('');
-        setHydrated(true);
-      }
-    }, 0);
-    return () => clearTimeout(id);
-  }, [mounted]);
-
-  useEffect(() => {
-    if (!mounted || !hydrated) return;
     const client = createSupabaseBrowserClient();
-    if (!client) return;
-    let cancelled = false;
-    void syncPpUserFromAuthSession(client).then((updated) => {
-      if (cancelled || !updated) return;
-      try {
-        const raw = localStorage.getItem('pp_user');
-        if (!raw) return;
-        const u = JSON.parse(raw) as PPUser;
-        setUser(u);
-        setProvider((u.provider as Provider) || 'gemini');
-        setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
-      } catch {
-        // ignore
+    if (!client) {
+      setUser(null);
+      setProvider('gemini');
+      setApiKey('');
+      setHydrated(true);
+      return;
+    }
+
+    const applyAuthUser = (authUser: User | null) => {
+      if (!authUser?.id) {
+        setUser(null);
+        const p = (readEnginePrefs()?.provider as Provider) || 'gemini';
+        setProvider(p);
+        setApiKey(loadApiKey(p));
+        setHydrated(true);
+        return;
       }
-    });
-    return () => {
-      cancelled = true;
+      persistEnginePrefsFromAuthUser();
+      const prefs = readEnginePrefs();
+      const u = buildAppUserFromSupabaseUser(authUser, prefs) as PPUser;
+      setUser(u);
+      setProvider((u.provider as Provider) || 'gemini');
+      setApiKey(loadApiKey((u.provider as Provider) || 'gemini'));
+      setHydrated(true);
     };
-  }, [mounted, hydrated]);
+
+    void resolveAuthUserAndSession(client).then(({ user }) => {
+      applyAuthUser(user);
+    });
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      applyAuthUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted || !hydrated || user) return;

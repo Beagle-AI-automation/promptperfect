@@ -16,6 +16,7 @@ import {
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
 import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
+import { writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -146,16 +147,10 @@ export default function LoginPage() {
             refresh_token: data.session.refresh_token,
           });
         }
-        localStorage.setItem(
-          'pp_user',
-          JSON.stringify({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            provider: user.provider ?? 'gemini',
-            model: user.model ?? 'gemini-2.0-flash',
-          })
-        );
+        writeEnginePrefs({
+          provider: user.provider ?? 'gemini',
+          model: user.model ?? 'gemini-2.0-flash',
+        });
         router.push('/control-room');
         return;
       }
@@ -198,16 +193,10 @@ export default function LoginPage() {
           refresh_token: data.session.refresh_token,
         });
       }
-      localStorage.setItem(
-        'pp_user',
-        JSON.stringify({
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-          provider: data.user.provider,
-          model: data.user.model,
-        })
-      );
+      writeEnginePrefs({
+        provider: data.user.provider,
+        model: data.user.model,
+      });
         await claimGuestHistoryAfterAuth();
       router.push('/app');
     } catch {

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  // Ensure user exists in pp_users before writing user_id FK (upsert if needed)
+  // Ensure app users row exists before writing user_id FK (upsert if needed)
   const { data: existingUser } = await admin
     .from('pp_users')
     .select('id')

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Provider } from '@/lib/types';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { readEnginePrefs, writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
+import { resolveAuthUserAndSession } from '@/lib/client/ppUserSync';
 
 const PROVIDER_MODELS: Record<Provider, string> = {
   gemini: 'gemini-2.0-flash',
@@ -43,23 +46,31 @@ export default function ControlRoomPage() {
     let cancelled = false;
     const id = setTimeout(() => {
       if (cancelled) return;
-      try {
-        const raw = localStorage.getItem('pp_user');
-        if (!raw) {
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        router.replace('/signup');
+        return;
+      }
+      void resolveAuthUserAndSession(client).then(({ user }) => {
+        if (cancelled) return;
+        if (!user?.id) {
           router.replace('/signup');
           return;
         }
-        const u = JSON.parse(raw) as { id: string; provider?: string; api_key?: string };
-        setUser({ id: u.id, provider: u.provider ?? 'gemini', api_key: u.api_key });
-        if (u.provider && u.provider !== 'gemini') {
+        const prefs = readEnginePrefs();
+        const providerPref = (prefs?.provider as Provider) || 'gemini';
+        setUser({
+          id: user.id,
+          provider: providerPref,
+          api_key: undefined,
+        });
+        if (providerPref && providerPref !== 'gemini') {
           router.replace('/app');
           return;
         }
-        if (u.provider) setProvider(u.provider as Provider);
+        setProvider(providerPref);
         setContinueError('');
-      } catch {
-        router.replace('/signup');
-      }
+      });
     }, 0);
     return () => {
       cancelled = true;
@@ -111,12 +122,10 @@ export default function ControlRoomPage() {
         );
         return;
       }
-      const updated = {
-        ...JSON.parse(localStorage.getItem('pp_user') || '{}'),
+      writeEnginePrefs({
         provider,
         model: PROVIDER_MODELS[provider],
-      };
-      localStorage.setItem('pp_user', JSON.stringify(updated));
+      });
       if (provider !== 'gemini' && apiKey.trim() !== '') {
         try {
           const stored: Record<string, string> = JSON.parse(
