@@ -13,9 +13,11 @@ import { fetchProfileFromApi } from '@/lib/client/userProfile';
 
 interface UserAccountMenuProps {
   userId: string;
-  /** Used before / until profile loads (e.g. `pp_user.name` or email local part). */
+  /** Used before / until profile loads (e.g. display name from session metadata or email local part). */
   fallbackDisplayName: string;
   onLogout: () => void;
+  /** When true, logout is in progress — disables the control and shows a pending label. */
+  signingOut?: boolean;
 }
 
 type ProfileSnippet = {
@@ -46,6 +48,7 @@ export function UserAccountMenu({
   userId,
   fallbackDisplayName,
   onLogout,
+  signingOut = false,
 }: UserAccountMenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -180,7 +183,7 @@ export function UserAccountMenu({
 
   /** Destructive-style hover (logout), aligned with typical delete actions. */
   const logoutItemClass =
-    'flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#B0B0B0] transition hover:bg-red-950/35 hover:text-red-400 focus-visible:outline-none focus-visible:bg-red-950/35 focus-visible:text-red-400';
+    'flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#B0B0B0] transition hover:bg-red-950/35 hover:text-red-400 focus-visible:outline-none focus-visible:bg-red-950/35 focus-visible:text-red-400 disabled:pointer-events-none disabled:opacity-50';
 
   return (
     <div ref={wrapRef} className="relative">
@@ -237,9 +240,10 @@ export function UserAccountMenu({
             role="menuitem"
             className={logoutItemClass}
             onClick={handleLogout}
+            disabled={signingOut}
           >
             <LogOut className="h-4 w-4 shrink-0" aria-hidden strokeWidth={2} />
-            Log out
+            {signingOut ? 'Signing out...' : 'Log out'}
           </button>
         </div>
       ) : null}

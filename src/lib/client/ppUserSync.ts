@@ -3,6 +3,11 @@
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { clearNavProfileCache } from '@/lib/client/navProfileCache';
 import { clearStatsBarCache } from '@/lib/client/statsBarCache';
+import {
+  readEnginePrefs,
+  writeEnginePrefs,
+  clearEnginePrefs,
+} from '@/lib/client/enginePrefsStorage';
 import { wipeBrowserSupabaseSession } from '@/lib/client/supabaseBrowserSessionWipe';
 
 /** Serialize auth calls — concurrent getUser/getSession steal the GoTrue storage lock (Next/Turbopack). */
@@ -91,62 +96,33 @@ export async function resolveAuthUserAndSession(
 }
 
 /**
- * Overwrite `pp_user.id` / `pp_user.email` from Supabase Auth when the session
- * is valid. Fixes stale ids (e.g. old `pp_users` row) that make Admin
- * `getUserById` return "User not found" for this project.
+ * Persist only engine defaults (provider/model).
+ * Preserves existing prefs when set so BYOK provider choice survives session refresh.
  */
-export function applyAuthUserToPpUserStorage(user: User): void {
-  if (typeof window === 'undefined') return;
-  const email = user.email?.trim();
-  if (!user.id || !email) return;
-
-  let existing: Record<string, unknown> = {};
-  try {
-    const raw = localStorage.getItem('pp_user');
-    if (raw) existing = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    // ignore
-  }
-
-  const metaName =
-    (typeof user.user_metadata?.full_name === 'string'
-      ? user.user_metadata.full_name.trim()
-      : '') ||
-    (typeof user.user_metadata?.name === 'string'
-      ? user.user_metadata.name.trim()
-      : '') ||
-    null;
-
-  const prevName =
-    typeof existing.name === 'string' ? existing.name.trim() : '';
-  const merged = {
-    id: user.id,
-    email,
-    name: prevName || metaName,
-    provider:
-      typeof existing.provider === 'string' && existing.provider
-        ? existing.provider
-        : 'gemini',
-    model:
-      typeof existing.model === 'string' && existing.model
-        ? existing.model
-        : 'gemini-2.0-flash',
-  };
-
-  localStorage.setItem('pp_user', JSON.stringify(merged));
+export function persistEnginePrefsFromAuthUser(): void {
+  const prev = readEnginePrefs() ?? {};
+  const provider =
+    typeof prev.provider === 'string' && prev.provider
+      ? prev.provider
+      : 'gemini';
+  const model =
+    typeof prev.model === 'string' && prev.model
+      ? prev.model
+      : 'gemini-2.0-flash';
+  writeEnginePrefs({ provider, model });
 }
 
-/** Returns true if storage was updated (session user present). */
-export async function syncPpUserFromAuthSession(
+/** Refresh persisted engine prefs after a validated Auth session (no identity in localStorage). */
+export async function syncEnginePrefsFromAuthSession(
   supabase: SupabaseClient,
 ): Promise<boolean> {
   const { user } = await resolveAuthUserWithRefresh(supabase);
   if (!user?.id || !user.email?.trim()) return false;
-  applyAuthUserToPpUserStorage(user);
+  persistEnginePrefsFromAuthUser();
   return true;
 }
 
-/** Clear app login state and Supabase session so `/app` does not re-sync `pp_user`. */
+/** Clear Supabase session, engine prefs cache, and profile stats caches. */
 export async function clearPromptPerfectLocalAuth(
   supabase: SupabaseClient | null,
 ): Promise<void> {
@@ -163,7 +139,7 @@ export async function clearPromptPerfectLocalAuth(
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.removeItem('pp_user');
+      clearEnginePrefs();
     } catch {
       /* ignore */
     }

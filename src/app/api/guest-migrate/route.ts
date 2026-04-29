@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server';
 import { migrateGuestHistoryAdmin } from '@/lib/server/guestHistoryMigration';
+import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { userId?: string; guestId?: string };
-    const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+    const supabase = await createRouteHandlerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json() as { guestId?: string };
+    const userId = user.id;
     const guestId = typeof body.guestId === 'string' ? body.guestId.trim() : '';
 
-    if (!userId || !guestId) {
-      return NextResponse.json({ error: 'userId and guestId are required' }, { status: 400 });
+    if (!guestId) {
+      return NextResponse.json({ error: 'guestId is required' }, { status: 400 });
     }
 
     const { error } = await migrateGuestHistoryAdmin(userId, guestId);

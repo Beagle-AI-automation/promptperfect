@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
+import { writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -56,20 +57,11 @@ export default function AuthCallbackPage() {
 
       const user = session?.user;
       if (user?.id && user.email) {
-        localStorage.setItem(
-          'pp_user',
-          JSON.stringify({
-            id: user.id,
-            name:
-              (user.user_metadata?.full_name as string | undefined) ??
-              (user.user_metadata?.name as string | undefined) ??
-              null,
-            email: user.email ?? '',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash',
-          }),
-        );
-        await claimGuestHistoryAfterAuth(user.id);
+        writeEnginePrefs({
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+        });
+        await claimGuestHistoryAfterAuth();
         router.replace('/app');
         return;
       }

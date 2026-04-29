@@ -1,23 +1,26 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 export async function POST(request: Request) {
   try {
+    const authClient = await createRouteHandlerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const userId = typeof body.user_id === 'string' ? body.user_id.trim() : '';
+    const userId = user.id;
     const provider = typeof body.provider === 'string' ? body.provider : undefined;
     const model = typeof body.model === 'string' ? body.model : undefined;
     const api_key = typeof body.api_key === 'string' ? body.api_key : undefined;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'user_id is required' },
-        { status: 400 }
-      );
-    }
-
-    const supabase = getSupabaseAdminClient();
-    if (!supabase) {
+    const admin = getSupabaseAdminClient();
+    if (!admin) {
       return NextResponse.json(
         { error: 'Database not configured' },
         { status: 503 }
@@ -33,7 +36,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const { data: updatedRow, error } = await supabase
+    const { data: updatedRow, error } = await admin
       .from('pp_users')
       .update(updates)
       .eq('id', userId)

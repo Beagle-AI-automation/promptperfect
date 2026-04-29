@@ -41,7 +41,7 @@ function browserClient(): SupabaseClient | null {
 
 /**
  * Load profile + dashboard stats in one request (preferred on `/profile`).
- * Uses `/api/profile` so app login (`pp_user` headers + service role) works with RLS.
+ * Uses `/api/profile` with session Bearer + matching user headers and service role where configured.
  */
 export async function fetchProfileFromApi(
   supabase: SupabaseClient | null = browserClient(),
@@ -191,7 +191,6 @@ export async function updateUserProfile(
  * into the signed-in session and attaches `user_id`. Clears `pp_guest_id` / `pp_guest_count` on success.
  */
 export async function migrateGuestHistory(
-  userId: string,
   guestId: string,
 ): Promise<{ error: Error | null }> {
   if (!guestId.startsWith('guest_')) {
@@ -207,7 +206,8 @@ export async function migrateGuestHistory(
     const res = await fetch('/api/auth/claim-guest-history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guestId, targetSessionId, userId }),
+      credentials: 'same-origin',
+      body: JSON.stringify({ guestId, targetSessionId }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -224,14 +224,15 @@ export async function migrateGuestHistory(
   }
 }
 
-/** Same as `migrateGuestHistory(userId, getStoredGuestId())` when `pp_guest_id` exists. */
-export async function migrateGuestHistoryIfNeeded(
-  userId: string,
-): Promise<{ error: Error | null; ran: boolean }> {
+/** Same as `migrateGuestHistory(getStoredGuestId())` when `pp_guest_id` exists. */
+export async function migrateGuestHistoryIfNeeded(): Promise<{
+  error: Error | null;
+  ran: boolean;
+}> {
   const guestId = getStoredGuestId();
   if (!guestId.startsWith('guest_')) {
     return { error: null, ran: false };
   }
-  const { error } = await migrateGuestHistory(userId, guestId);
+  const { error } = await migrateGuestHistory(guestId);
   return { error, ran: true };
 }

@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
  * Sends Supabase password recovery email using a server-built redirect URL
  * (must match Authentication → Redirect URLs). Verifies the email exists in
  * Supabase Auth (`auth.users`) via admin `generateLink` so OAuth-only and
- * email users are included—not only `pp_users` / `pp_user_profiles`.
+ * email users are included—not only rows in the app user / profile tables.
  */
 export async function POST(request: Request) {
   const ip =

@@ -70,7 +70,7 @@ export async function resolveIdentity(request: Request): Promise<
 
   // Both are sent from the app (see getPromptPerfectAuthHeaders). If they disagree,
   // preferring only the JWT made the API use another user's id while the UI still
-  // showed pp_user — leaking library/history/stats across accounts.
+  // showed mismatched header identity — leaking library/history/stats across accounts.
   if (jwt && pp) {
     if (jwt.userId.toLowerCase() !== pp.userId.toLowerCase()) {
       return undefined;

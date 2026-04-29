@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { Provider } from '@/lib/types';
+import { writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
 
 const STORAGE_KEY = 'promptperfect:apikey';
 const PROVIDER_LABELS: Record<Provider, string> = {
@@ -26,7 +27,6 @@ function loadStoredKey(p: Provider): string {
 interface AppSettingsPanelProps {
   open: boolean;
   onClose: () => void;
-  userId: string;
   provider: Provider;
   onProviderChange: (p: Provider) => void;
   apiKey: string;
@@ -37,7 +37,6 @@ interface AppSettingsPanelProps {
 export function AppSettingsPanel({
   open,
   onClose,
-  userId,
   provider,
   onProviderChange,
   apiKey,
@@ -70,8 +69,8 @@ export function AppSettingsPanel({
       const res = await fetch('/api/auth/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({
-          user_id: userId,
           provider: localProvider,
           model:
             localProvider === 'gemini'
@@ -107,22 +106,15 @@ export function AppSettingsPanel({
           );
         }
       }
-      const raw = localStorage.getItem('pp_user');
-      if (raw) {
-        try {
-          const u = JSON.parse(raw) as Record<string, unknown>;
-          u.provider = localProvider;
-          u.model =
-            localProvider === 'gemini'
-              ? 'gemini-2.0-flash'
-              : localProvider === 'openai'
-                ? 'gpt-4o-mini'
-                : 'claude-3-5-haiku-20241022';
-          localStorage.setItem('pp_user', JSON.stringify(u));
-        } catch {
-          // ignore
-        }
-      }
+      writeEnginePrefs({
+        provider: localProvider,
+        model:
+          localProvider === 'gemini'
+            ? 'gemini-2.0-flash'
+            : localProvider === 'openai'
+              ? 'gpt-4o-mini'
+              : 'claude-3-5-haiku-20241022',
+      });
       onSaveSuccess();
       onClose();
     } finally {

@@ -6,7 +6,6 @@ import { useMemo, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { validatePassword } from '@/lib/auth/validation';
 import { signInWithGoogle } from '@/lib/auth/signInWithGoogle';
-import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { GoogleIcon } from '@/components/auth/GoogleIcon';
@@ -16,6 +15,7 @@ import {
   authLabelClass,
   authPrimaryBtnClass,
 } from '@/components/auth/auth-styles';
+import { writeEnginePrefs } from '@/lib/client/enginePrefsStorage';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -105,16 +105,10 @@ export default function SignUpPage() {
           refresh_token: data.session.refresh_token,
         });
       }
-      localStorage.setItem(
-        'pp_user',
-        JSON.stringify({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          provider: user.provider ?? 'gemini',
-          model: user.model ?? 'gemini-2.0-flash',
-        })
-      );
+      writeEnginePrefs({
+        provider: user.provider ?? 'gemini',
+        model: user.model ?? 'gemini-2.0-flash',
+      });
       router.push('/control-room');
     } catch {
       setError('Something went wrong');

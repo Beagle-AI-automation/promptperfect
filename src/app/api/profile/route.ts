@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: 'Server misconfigured',
-        hint: 'Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY in .env so profiles work with app login (pp_user) and for reliable database access.',
+        hint: 'Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY in .env so profiles work with cookie session auth and for reliable database access.',
       },
       { status: 503 },
     );
@@ -140,10 +140,10 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: missing
-          ? 'Database table pp_user_profiles is missing.'
+          ? 'Database user profiles table is missing.'
           : selErr.message,
         hint: missing
-          ? 'Run supabase/migrations/20250405000000_pp_user_profiles.sql in the Supabase SQL editor.'
+          ? 'Run the user profiles migration in the Supabase SQL editor (see supabase/migrations in this repo).'
           : undefined,
         code: 'PROFILE_DB_ERROR',
       },
@@ -367,7 +367,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: selErr.message }, { status: 500 });
   }
 
-  /** Accounts registered before `pp_user_profiles` / `handle_new_user` may have no row; UPDATE alone returned 0 rows. */
+  /** Accounts registered before user_profiles + handle_new_user may have no row; UPDATE alone returned 0 rows. */
   let email =
     (current?.email && current.email.trim()) ||
     identity.email?.trim() ||

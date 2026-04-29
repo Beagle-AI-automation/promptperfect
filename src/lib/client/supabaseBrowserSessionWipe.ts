@@ -3,8 +3,7 @@
 /**
  * Last-resort cleanup after `auth.signOut()` so we are not left with cookie or
  * legacy localStorage tokens (e.g. SSR client uses cookies; old builds used
- * localStorage). Surviving session + `syncPpUserFromAuthSession` would
- * recreate `pp_user` and appear "logged in again."
+ * localStorage). Surviving session tokens would let the client appear signed in again.
  */
 export function wipeBrowserSupabaseSession(): void {
   if (typeof window === 'undefined') return;
