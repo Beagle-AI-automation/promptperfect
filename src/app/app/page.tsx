@@ -152,6 +152,7 @@ export default function AppPage() {
   const [syncError, setSyncError] = useState<string | null>(null);
   /** Whether this history row is already in the library (server). */
   const [inLibrary, setInLibrary] = useState<boolean | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -622,15 +623,26 @@ export default function AppPage() {
   }, []);
 
   const handleLogout = async () => {
-    const client = createSupabaseBrowserClient();
-    await clearPromptPerfectLocalAuth(client ?? null);
+    setSigningOut(true);
+    const supabase = createSupabaseBrowserClient();
     try {
-      localStorage.removeItem('pp:optimization_session_id');
-    } catch {
-      /* ignore */
+      await supabase?.auth.signOut();
+    } finally {
+      try {
+        localStorage.removeItem('pp_ui_theme');
+      } catch {
+        /* ignore */
+      }
+      await clearPromptPerfectLocalAuth(null);
+      try {
+        localStorage.removeItem('pp:optimization_session_id');
+      } catch {
+        /* ignore */
+      }
+      setSigningOut(false);
+      setUser(null);
+      router.push('/login');
     }
-    setUser(null);
-    router.replace('/');
   };
 
   if (!mounted || !hydrated) {
@@ -683,6 +695,7 @@ export default function AppPage() {
                     'there'
                   }
                   onLogout={handleLogout}
+                  signingOut={signingOut}
                 />
               </>
             ) : (
