@@ -825,7 +825,6 @@ export default function AppPage() {
         <AppSettingsPanel
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
-          userId={user.id}
           provider={provider}
           onProviderChange={setProvider}
           apiKey={apiKey}

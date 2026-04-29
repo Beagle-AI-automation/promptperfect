@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: 'Server misconfigured',
-        hint: 'Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY in .env so profiles work with app login (pp_user) and for reliable database access.',
+        hint: 'Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY in .env so profiles work with cookie session auth and for reliable database access.',
       },
       { status: 503 },
     );

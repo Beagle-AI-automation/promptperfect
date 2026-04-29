@@ -5,24 +5,21 @@ import { getOrCreateSessionId } from '@/lib/client/optimizationHistory';
 import { getSupabaseClient } from '@/lib/client/supabase';
 
 /**
- * Re-parent guest optimizations to the signed-in browser session and optional `user_id`.
+ * Re-parent guest optimizations to the signed-in browser session and `user_id` from the session cookie.
  * Clears guest localStorage on success.
  */
-export async function claimGuestHistoryAfterAuth(
-  userId?: string | null,
-): Promise<void> {
+export async function claimGuestHistoryAfterAuth(): Promise<void> {
   const guestId = getStoredGuestId();
   if (!guestId.startsWith('guest_')) return;
   const targetSessionId = getOrCreateSessionId();
   if (!targetSessionId || guestId === targetSessionId) return;
 
-  const uid = userId?.trim() || undefined;
-
   try {
     const res = await fetch('/api/auth/claim-guest-history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guestId, targetSessionId, userId: uid }),
+      credentials: 'same-origin',
+      body: JSON.stringify({ guestId, targetSessionId }),
     });
     if (res.ok) {
       clearGuestLocalStorage();
@@ -35,10 +32,13 @@ export async function claimGuestHistoryAfterAuth(
   const client = getSupabaseClient();
   if (!client) return;
 
+  const {
+    data: { user },
+  } = await client.auth.getUser();
   const patch: { session_id: string; user_id?: string } = {
     session_id: targetSessionId,
   };
-  if (uid) patch.user_id = uid;
+  if (user?.id) patch.user_id = user.id;
 
   const { error } = await client
     .from('pp_optimization_history')

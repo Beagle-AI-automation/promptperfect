@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/client/supabase';
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 export async function POST(request: Request) {
   try {
+    const authClient = await createRouteHandlerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = user.id;
+
     const body = (await request.json().catch(() => null)) as Record<
       string,
       unknown
@@ -16,9 +25,6 @@ export async function POST(request: Request) {
       typeof body?.targetSessionId === 'string'
         ? body.targetSessionId.trim()
         : '';
-    const userIdRaw =
-      typeof body?.userId === 'string' ? body.userId.trim() : '';
-    const userId = UUID_RE.test(userIdRaw) ? userIdRaw : undefined;
 
     if (
       !guestId.startsWith('guest_') ||
@@ -30,17 +36,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const supabase = getSupabaseAdminClient();
-    if (!supabase) {
+    const admin = getSupabaseAdminClient();
+    if (!admin) {
       return NextResponse.json({ ok: true, skipped: true, migrated: 0 });
     }
 
-    const updates: { session_id: string; user_id?: string } = {
+    const updates: { session_id: string; user_id: string } = {
       session_id: targetSessionId,
+      user_id: userId,
     };
-    if (userId) updates.user_id = userId;
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('pp_optimization_history')
       .update(updates)
       .eq('session_id', guestId)
@@ -51,7 +57,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Update failed' }, { status: 500 });
     }
 
-    const { error: delErr } = await supabase
+    const { error: delErr } = await admin
       .from('guest_usage')
       .delete()
       .eq('guest_id', guestId);

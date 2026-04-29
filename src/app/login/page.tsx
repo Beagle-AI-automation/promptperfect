@@ -208,7 +208,7 @@ export default function LoginPage() {
           model: data.user.model,
         })
       );
-      await claimGuestHistoryAfterAuth(data.user.id);
+        await claimGuestHistoryAfterAuth();
       router.push('/app');
     } catch {
       setError('Something went wrong');

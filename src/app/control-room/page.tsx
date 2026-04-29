@@ -95,8 +95,8 @@ export default function ControlRoomPage() {
       const res = await fetch('/api/auth/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({
-          user_id: user.id,
           provider,
           model: PROVIDER_MODELS[provider],
           api_key: provider !== 'gemini' ? apiKey : '',

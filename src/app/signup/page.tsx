@@ -6,7 +6,6 @@ import { useMemo, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { validatePassword } from '@/lib/auth/validation';
 import { signInWithGoogle } from '@/lib/auth/signInWithGoogle';
-import { claimGuestHistoryAfterAuth } from '@/lib/client/claimGuestHistory';
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { GoogleIcon } from '@/components/auth/GoogleIcon';

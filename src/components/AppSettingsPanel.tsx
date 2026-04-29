@@ -26,7 +26,6 @@ function loadStoredKey(p: Provider): string {
 interface AppSettingsPanelProps {
   open: boolean;
   onClose: () => void;
-  userId: string;
   provider: Provider;
   onProviderChange: (p: Provider) => void;
   apiKey: string;
@@ -37,7 +36,6 @@ interface AppSettingsPanelProps {
 export function AppSettingsPanel({
   open,
   onClose,
-  userId,
   provider,
   onProviderChange,
   apiKey,
@@ -70,8 +68,8 @@ export function AppSettingsPanel({
       const res = await fetch('/api/auth/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({
-          user_id: userId,
           provider: localProvider,
           model:
             localProvider === 'gemini'

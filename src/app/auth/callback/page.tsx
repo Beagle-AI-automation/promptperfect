@@ -69,7 +69,7 @@ export default function AuthCallbackPage() {
             model: 'gemini-2.0-flash',
           }),
         );
-        await claimGuestHistoryAfterAuth(user.id);
+        await claimGuestHistoryAfterAuth();
         router.replace('/app');
         return;
       }

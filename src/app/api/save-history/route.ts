@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -11,6 +12,15 @@ function getAdminClient() {
 }
 
 export async function POST(request: Request) {
+  const routeSupabase = await createRouteHandlerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await routeSupabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const admin = getAdminClient();
   if (!admin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
@@ -30,36 +40,33 @@ export async function POST(request: Request) {
   const mode = typeof b.mode === 'string' ? b.mode : 'better';
   const explanation = typeof b.explanation === 'string' ? b.explanation : '';
   const provider = typeof b.provider === 'string' ? b.provider : null;
-  const user_id = typeof b.user_id === 'string' && b.user_id.trim() ? b.user_id.trim() : null;
+  const user_id = user.id;
 
   if (!session_id || !prompt_original || !prompt_optimized) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
   // Ensure user exists in pp_users before writing user_id FK (upsert if needed)
-  if (user_id) {
-    const { data: existingUser } = await admin
-      .from('pp_users')
-      .select('id')
-      .eq('id', user_id)
-      .maybeSingle();
+  const { data: existingUser } = await admin
+    .from('pp_users')
+    .select('id')
+    .eq('id', user_id)
+    .maybeSingle();
 
-    if (!existingUser) {
-      // Pull email from auth.users and create the pp_users row on the fly
-      const { data: authUser } = await admin.auth.admin.getUserById(user_id);
-      if (authUser?.user) {
-        await admin.from('pp_users').upsert(
-          {
-            id: user_id,
-            email: authUser.user.email ?? '',
-            password_hash: 'supabase_auth',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash',
-            api_key: '',
-          },
-          { onConflict: 'id' },
-        );
-      }
+  if (!existingUser) {
+    const { data: authUser } = await admin.auth.admin.getUserById(user_id);
+    if (authUser?.user) {
+      await admin.from('pp_users').upsert(
+        {
+          id: user_id,
+          email: authUser.user.email ?? '',
+          password_hash: 'supabase_auth',
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+          api_key: '',
+        },
+        { onConflict: 'id' },
+      );
     }
   }
 
@@ -70,7 +77,7 @@ export async function POST(request: Request) {
     mode,
     explanation,
   };
-  if (user_id) row.user_id = user_id;
+  row.user_id = user_id;
   if (provider) row.provider = provider;
 
   const { data, error } = await admin
