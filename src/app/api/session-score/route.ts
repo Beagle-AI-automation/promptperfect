@@ -35,7 +35,9 @@ export async function POST(req: NextRequest) {
       .select('id');
 
     if (error) {
-      console.error('[session-score] update error:', error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[session-score] update error:', error);
+      }
       return Response.json({ error: error.message }, { status: 500 });
     }
 

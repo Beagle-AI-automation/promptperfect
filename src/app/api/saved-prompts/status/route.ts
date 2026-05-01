@@ -42,7 +42,9 @@ export async function GET(request: Request) {
   }
 
   if (!isSourceHistoryColumnUnavailable(primary.error.message)) {
-    console.warn('[saved-prompts/status]', primary.error.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[saved-prompts/status]', primary.error.message);
+    }
     return NextResponse.json({ saved: false });
   }
 
@@ -66,7 +68,9 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (matchErr) {
-    console.warn('[saved-prompts/status] fallback', matchErr.message);
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[saved-prompts/status] fallback', matchErr.message);
+    }
     return NextResponse.json({ saved: false });
   }
 

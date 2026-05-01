@@ -85,14 +85,18 @@ export async function POST(request: Request) {
             }
           }
         } catch (logErr) {
-          console.error('[api/optimize] onFinish logging error:', logErr);
+          if (process.env.NODE_ENV !== 'production') {
+            console.error('[api/optimize] onFinish logging error:', logErr);
+          }
         }
       },
     });
 
     return result.toTextStreamResponse();
   } catch (err) {
-    console.error('[api/optimize]', err);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[api/optimize]', err);
+    }
     return Response.json(
       { error: userFacingOptimizeError(err) },
       { status: 500 },

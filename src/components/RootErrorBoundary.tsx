@@ -14,7 +14,9 @@ export class RootErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[RootErrorBoundary]", error.message, errorInfo.componentStack);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[RootErrorBoundary]", error.message, errorInfo.componentStack);
+    }
   }
 
   render() {

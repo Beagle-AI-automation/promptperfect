@@ -37,7 +37,9 @@ export async function GET(request: Request) {
       const fallback =
         /optimize_session_id|schema cache|could not find/i.test(error.message);
       if (!fallback) {
-        console.error('[Stats API]', error);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[Stats API]', error);
+        }
         return Response.json({ error: error.message }, { status: 500 });
       }
       const { data: hist2, error: err2 } = await supabase
@@ -45,7 +47,9 @@ export async function GET(request: Request) {
         .select('mode, provider')
         .eq('user_id', identity.userId);
       if (err2) {
-        console.error('[Stats API]', err2);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[Stats API]', err2);
+        }
         return Response.json({ error: err2.message }, { status: 500 });
       }
       const rows = hist2 ?? [];
@@ -119,7 +123,9 @@ export async function GET(request: Request) {
       authenticated: true,
     });
   } catch (err) {
-    console.error('[Stats API] Unexpected error:', err);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Stats API] Unexpected error:', err);
+    }
     return Response.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 }
