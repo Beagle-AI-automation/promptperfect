@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
 import {
   getDbForIdentity,
   jsonUnauthorizedDetails,
   resolveIdentity,
-  wantsPpUserAuth,
 } from '@/lib/server/supabaseRequestIdentity';
 
 const MAX_TITLE = 200;
@@ -16,22 +14,7 @@ function isMissingSourceHistoryColumn(message: string): boolean {
   );
 }
 
-function serviceKeyRequiredResponse() {
-  return NextResponse.json(
-    {
-      error: 'Saved prompts API needs the service role key.',
-      hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env (same project as NEXT_PUBLIC_SUPABASE_URL). Restart the dev server.',
-      code: 'SERVICE_KEY_REQUIRED',
-    },
-    { status: 503 },
-  );
-}
-
 export async function GET(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return serviceKeyRequiredResponse();
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -76,10 +59,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return serviceKeyRequiredResponse();
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -210,10 +189,6 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return serviceKeyRequiredResponse();
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {

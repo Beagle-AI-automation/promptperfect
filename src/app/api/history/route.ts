@@ -4,7 +4,6 @@ import {
   getDbForIdentity,
   jsonUnauthorizedDetails,
   resolveIdentity,
-  wantsPpUserAuth,
 } from '@/lib/server/supabaseRequestIdentity';
 
 const ROW_SELECT_FULL =
@@ -26,17 +25,6 @@ type HistoryListRow = {
 };
 
 export async function GET(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'History API needs the service role key.',
-        hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -104,17 +92,6 @@ type HistoryInsertBody = {
 
 /** Server-side insert when browser PostgREST insert fails (RLS/column mismatch). */
 export async function POST(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'History API needs the service role key.',
-        hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -217,17 +194,6 @@ function isMissingSourceHistoryColumn(message: string): boolean {
 
 /** Remove library rows tied to this history entry, then the history row. */
 export async function DELETE(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'History API needs the service role key.',
-        hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
