@@ -53,7 +53,9 @@ export async function POST(request: Request) {
       .select('id');
 
     if (error) {
-      console.error('[claim-guest-history]', error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[claim-guest-history]', error);
+      }
       return NextResponse.json({ error: 'Update failed' }, { status: 500 });
     }
 
@@ -64,7 +66,10 @@ export async function POST(request: Request) {
 
     if (delErr) {
       const msg = String(delErr.message || '');
-      if (!/does not exist|could not find|schema cache/i.test(msg)) {
+      if (
+        !/does not exist|could not find|schema cache/i.test(msg) &&
+        process.env.NODE_ENV !== 'production'
+      ) {
         console.warn('[claim-guest-history] guest_usage cleanup:', msg);
       }
     }
@@ -74,7 +79,9 @@ export async function POST(request: Request) {
       migrated: data?.length ?? 0,
     });
   } catch (e) {
-    console.error('[claim-guest-history]', e);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[claim-guest-history]', e);
+    }
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 }

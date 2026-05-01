@@ -146,14 +146,18 @@ export async function saveToHistory(params: {
       if (!error && data?.id) {
         return data.id;
       }
-      if (error && typeof window !== 'undefined') {
+      if (
+        error &&
+        typeof window !== 'undefined' &&
+        process.env.NODE_ENV !== 'production'
+      ) {
         console.warn(
           '[PromptPerfect] History save to Supabase failed:',
           error.message,
         );
       }
     } catch (e) {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
         console.warn('[PromptPerfect] History save error:', e);
       }
     }

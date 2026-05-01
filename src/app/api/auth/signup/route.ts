@@ -155,7 +155,7 @@ export async function POST(request: Request) {
     const { error: confirmErr } = await supabase.auth.admin.updateUserById(uid, {
       email_confirm: true,
     })
-    if (confirmErr) {
+    if (confirmErr && process.env.NODE_ENV !== 'production') {
       console.error('[signup] updateUserById after signUp:', confirmErr.message)
     }
   }
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
       access_token: signInData.session.access_token,
       refresh_token: signInData.session.refresh_token,
     }
-  } else if (signInErr) {
+  } else if (signInErr && process.env.NODE_ENV !== 'production') {
     console.error('[signup] signInWithPassword after signup:', signInErr.message)
   }
 
