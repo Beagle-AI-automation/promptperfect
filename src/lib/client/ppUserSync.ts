@@ -131,7 +131,7 @@ export async function clearPromptPerfectLocalAuth(
       /** Default `global` revokes refresh token server-side and clears browser session. */
       await supabase.auth.signOut();
     } catch {
-      /* network / lock — fall through to local wipe */
+      // swallow: sign-out network/auth lock — fall through to local wipe
     }
   }
 
@@ -141,7 +141,7 @@ export async function clearPromptPerfectLocalAuth(
     try {
       clearEnginePrefs();
     } catch {
-      /* ignore */
+      // swallow: engine prefs clear failed (storage)
     }
     clearNavProfileCache();
     clearStatsBarCache();

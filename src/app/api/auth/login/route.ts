@@ -87,6 +87,7 @@ export async function POST(request: Request) {
       { status: 401 }
     )
   } catch {
+    // swallow: JSON parse or validation error
     return NextResponse.json(
       { error: 'Invalid request' },
       { status: 400 }

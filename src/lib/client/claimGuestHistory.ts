@@ -26,7 +26,7 @@ export async function claimGuestHistoryAfterAuth(): Promise<void> {
       return;
     }
   } catch {
-    // try anon fallback below
+    // swallow: authenticated claim path failed — try anon fallback below
   }
 
   const client = getSupabaseClient();

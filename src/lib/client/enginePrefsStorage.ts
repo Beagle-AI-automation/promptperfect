@@ -31,7 +31,7 @@ export function writeEnginePrefs(prefs: EnginePrefs): void {
       JSON.stringify({ ...prev, ...prefs }),
     );
   } catch {
-    /* quota / private mode */
+    // swallow: quota or private mode blocks prefs write
   }
 }
 
@@ -40,7 +40,7 @@ export function clearEnginePrefs(): void {
   try {
     localStorage.removeItem(ENGINE_PREFS_STORAGE_KEY);
   } catch {
-    /* ignore */
+    // swallow: prefs clear skipped
   }
 }
 

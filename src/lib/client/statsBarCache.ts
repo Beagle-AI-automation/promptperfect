@@ -43,7 +43,7 @@ export function clearStatsBarCache(): void {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    /* ignore */
+    // swallow: stats cache write skipped (storage)
   }
 }
 
@@ -60,6 +60,6 @@ export function writeStatsBarCache(
     };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(full));
   } catch {
-    /* quota / private mode */
+    // swallow: quota or private mode blocks cache write
   }
 }

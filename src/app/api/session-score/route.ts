@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       score,
     });
   } catch {
+    // swallow: JSON parse or validation error
     return Response.json({ error: 'Invalid request' }, { status: 400 });
   }
 }

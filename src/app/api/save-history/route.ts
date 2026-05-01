@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
+    // swallow: JSON parse error
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 

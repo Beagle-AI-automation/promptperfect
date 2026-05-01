@@ -68,6 +68,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch {
+    // swallow: JSON parse or validation error
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 }
