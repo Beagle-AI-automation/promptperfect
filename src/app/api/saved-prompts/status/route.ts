@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
 import {
   getDbForIdentity,
   jsonUnauthorizedDetails,
   resolveIdentity,
-  wantsPpUserAuth,
 } from '@/lib/server/supabaseRequestIdentity';
 
 /** PostgREST rejects filters on unknown columns until migration adds them. */
@@ -15,16 +13,6 @@ function isSourceHistoryColumnUnavailable(message: string): boolean {
 }
 
 export async function GET(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'Saved prompts API needs the service role key.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {

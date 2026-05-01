@@ -7,9 +7,9 @@ import {
 } from '@/lib/client/ppUserSync';
 
 /**
- * Headers for `/api/profile` and `/api/saved-prompts`.
- * Sends `Authorization` when the Supabase session is valid, and `X-PP-User-*`
- * from the same verified session user (so the service role can cross-check id+email).
+ * Optional headers for same-origin `/api/*` calls.
+ * Cookie sessions are sent automatically; `Authorization` is included when present
+ * so non-cookie clients (e.g. extension) can still call APIs.
  */
 export async function getPromptPerfectAuthHeaders(
   supabase: SupabaseClient,
@@ -20,15 +20,9 @@ export async function getPromptPerfectAuthHeaders(
     persistEnginePrefsFromAuthUser();
   }
 
-  const headers: Record<string, string> = {};
-  if (user?.id && user.email?.trim()) {
-    headers['X-PP-User-Id'] = user.id;
-    headers['X-PP-User-Email'] = user.email.trim();
-  }
-
   if (session?.access_token) {
-    headers.Authorization = `Bearer ${session.access_token}`;
+    return { Authorization: `Bearer ${session.access_token}` };
   }
 
-  return Object.keys(headers).length > 0 ? headers : null;
+  return null;
 }

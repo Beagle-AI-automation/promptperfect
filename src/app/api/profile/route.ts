@@ -9,7 +9,6 @@ import {
   getDbForIdentity,
   jsonUnauthorizedDetails,
   resolveIdentity,
-  wantsPpUserAuth,
 } from '@/lib/server/supabaseRequestIdentity';
 
 type ProfileRow = {
@@ -77,17 +76,6 @@ function computeStats(
 }
 
 export async function GET(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'Profile API needs the service role key.',
-        hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env (same project as NEXT_PUBLIC_SUPABASE_URL). Restart the dev server.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -290,17 +278,6 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if (wantsPpUserAuth(request) && !getSupabaseAdminClient()) {
-    return NextResponse.json(
-      {
-        error: 'Profile API needs the service role key.',
-        hint: 'Add SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to .env and restart the dev server.',
-        code: 'SERVICE_KEY_REQUIRED',
-      },
-      { status: 503 },
-    );
-  }
-
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {

@@ -3,7 +3,7 @@ import { computeOptimizationFeedbackAnalytics } from '@/lib/server/optimizationL
 import { resolveIdentity } from '@/lib/server/supabaseRequestIdentity';
 
 /**
- * Analytics for the signed-in user only (via `resolveIdentity`).
+ * Analytics for the signed-in user only (cookie session or Bearer via `resolveIdentity`).
  * Volume/mode/provider from `pp_optimization_history`; thumbs from `optimization_logs`
  * whose `session_id` still matches a row in that history (`id` or `optimize_session_id`).
  */

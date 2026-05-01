@@ -1,29 +1,30 @@
-import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
-const PROTECTED = ['/app', '/library', '/history', '/profile', '/control-room']
+const PROTECTED = ['/app', '/library', '/history', '/profile', '/control-room'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-} as const
+} as const;
 
+/** Next.js 16+ proxy (edge): Supabase session + protected routes + API CORS preflight. */
 export async function proxy(req: NextRequest) {
-  const pathname = req.nextUrl.pathname
+  const pathname = req.nextUrl.pathname;
 
   if (pathname.startsWith('/api')) {
     if (req.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 204, headers: corsHeaders })
+      return new NextResponse(null, { status: 204, headers: corsHeaders });
     }
-    const response = NextResponse.next()
+    const response = NextResponse.next();
     for (const [k, v] of Object.entries(corsHeaders)) {
-      response.headers.set(k, v)
+      response.headers.set(k, v);
     }
-    return response
+    return response;
   }
 
-  const res = NextResponse.next()
+  const res = NextResponse.next();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -36,18 +37,21 @@ export async function proxy(req: NextRequest) {
           ),
       },
     },
-  )
+  );
+
   const {
     data: { user },
-  } = await supabase.auth.getUser()
-  const isProtected = PROTECTED.some((p) => pathname.startsWith(p))
+  } = await supabase.auth.getUser();
+
+  const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   if (isProtected && !user) {
-    const login = req.nextUrl.clone()
-    login.pathname = '/login'
-    login.searchParams.set('next', pathname)
-    return NextResponse.redirect(login)
+    const login = req.nextUrl.clone();
+    login.pathname = '/login';
+    login.searchParams.set('next', pathname);
+    return NextResponse.redirect(login);
   }
-  return res
+
+  return res;
 }
 
 export const config = {
@@ -59,4 +63,4 @@ export const config = {
     '/profile/:path*',
     '/control-room/:path*',
   ],
-}
+};
