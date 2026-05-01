@@ -28,7 +28,7 @@ export function wipeBrowserSupabaseSession(): void {
     }
     for (const k of toRemove) localStorage.removeItem(k);
   } catch {
-    /* quota / lock */
+    // swallow: storage quota or auth lock while wiping keys
   }
 
   try {
@@ -45,6 +45,6 @@ export function wipeBrowserSupabaseSession(): void {
       document.cookie = `${encodeURIComponent(name)}=; Path=/; Max-Age=0; SameSite=Lax`;
     }
   } catch {
-    /* ignore */
+    // swallow: session wipe cleanup failed non-fatally
   }
 }

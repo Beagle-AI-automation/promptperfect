@@ -17,7 +17,7 @@ async function safeLogOptimization(insert: OptimizationLogInsert) {
     const mod = await import('@/lib/client/optimizationLogs');
     await mod.logOptimization(insert);
   } catch {
-    // ignore logging failures
+    // swallow: client logging failures are non-fatal
   }
 }
 

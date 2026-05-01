@@ -77,6 +77,7 @@ function loadApiKey(provider: Provider): string {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     return stored[provider] || '';
   } catch {
+    // swallow: could not read optimization session from storage
     return '';
   }
 }
@@ -213,7 +214,7 @@ export default function AppPage() {
         setSelectedMode(o.mode);
       }
     } catch {
-      // ignore invalid payload
+      // swallow: invalid settings JSON in localStorage
     }
   }, [mounted]);
 
@@ -406,7 +407,7 @@ export default function AppPage() {
           else if (typeof data?.message === 'string' && data.message.trim())
             msg = data.message.trim();
         } catch {
-          // keep default msg
+          // swallow: prefer upstream error message when parsing fails
         }
         throw new Error(msg);
       }
@@ -631,13 +632,13 @@ export default function AppPage() {
       try {
         localStorage.removeItem('pp_ui_theme');
       } catch {
-        /* ignore */
+        // swallow: theme/storage cleanup is best-effort
       }
       await clearPromptPerfectLocalAuth(null);
       try {
         localStorage.removeItem('pp:optimization_session_id');
       } catch {
-        /* ignore */
+        // swallow: secondary cleanup best-effort after sign-out
       }
       setSigningOut(false);
       setUser(null);

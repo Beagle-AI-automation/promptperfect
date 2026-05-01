@@ -175,7 +175,7 @@ export default function LibraryPage() {
           }),
         );
       } catch {
-        // ignore quota / private mode
+        // swallow: quota / private mode blocks draft storage
       }
       router.push('/app');
     },

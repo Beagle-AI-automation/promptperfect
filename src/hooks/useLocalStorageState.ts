@@ -9,7 +9,7 @@ export function useLocalStorageState<T>(key: string, initialValue: T) {
       const raw = window.localStorage.getItem(key);
       if (raw != null) setValue(JSON.parse(raw) as T);
     } catch {
-      // ignore
+      // swallow: invalid JSON or unreadable localStorage value
     } finally {
       setHydrated(true);
     }
@@ -20,7 +20,7 @@ export function useLocalStorageState<T>(key: string, initialValue: T) {
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // ignore
+      // swallow: localStorage quota or write blocked
     }
   }, [key, value, hydrated]);
 

@@ -49,7 +49,7 @@ export function writeNavProfileCache(
     };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(full));
   } catch {
-    /* quota / private mode */
+    // swallow: quota or private mode blocks profile cache write
   }
 }
 
@@ -58,6 +58,6 @@ export function clearNavProfileCache(): void {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    /* ignore */
+    // swallow: profile cache clear skipped
   }
 }

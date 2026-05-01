@@ -39,7 +39,7 @@ export function PromptInput({
       onCopy?.();
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      // swallow: clipboard or input helper failure
     }
   };
 

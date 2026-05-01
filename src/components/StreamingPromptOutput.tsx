@@ -64,7 +64,7 @@ export function StreamingPromptOutput({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      // swallow: streaming parse edge case
     }
   };
 
