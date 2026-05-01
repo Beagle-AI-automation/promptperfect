@@ -9,11 +9,36 @@ import { createProvider } from '@/lib/providers';
 import { getSystemPrompt } from '@/lib/prompts';
 import type { OptimizationMode, OptimizeRequest, Provider } from '@/lib/types';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+function parseAllowedOrigins(): string[] {
+  const raw = process.env.ALLOWED_ORIGINS?.trim();
+  if (!raw) {
+    return [
+      'http://localhost:3000',
+      'https://promptperfect.vercel.app',
+    ];
+  }
+  return raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+/** Restrict cross-origin access to `ALLOWED_ORIGINS` (falls back to localhost + production app). */
+function corsHeadersForRequest(req: NextRequest): Record<string, string> {
+  const allowed = parseAllowedOrigins();
+  const origin = req.headers.get('origin')?.trim().replace(/\/$/, '') ?? '';
+  const allowOrigin =
+    origin && allowed.includes(origin) ? origin : allowed[0] ?? '';
+  const h: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+  if (allowOrigin) {
+    h['Access-Control-Allow-Origin'] = allowOrigin;
+    h.Vary = 'Origin';
+  }
+  return h;
+}
 
 const MODES: OptimizationMode[] = [
   'better',
@@ -35,11 +60,15 @@ function isProvider(v: unknown): v is Provider {
   return typeof v === 'string' && PROVIDERS.includes(v as Provider);
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeadersForRequest(req),
+  });
 }
 
 export async function POST(req: NextRequest) {
+  const corsHeaders = corsHeadersForRequest(req);
   try {
     const body = (await req.json()) as Partial<OptimizeRequest> & {
       version?: string;
