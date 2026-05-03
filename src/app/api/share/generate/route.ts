@@ -1,59 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { getSupabaseClient } from '@/lib/supabase';
+
+import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import {
+  jsonUnauthorizedDetails,
+  resolveIdentity,
+} from '@/lib/server/supabaseRequestIdentity';
 
 export async function POST(req: NextRequest) {
+  const identity = await resolveIdentity(req);
+  if (!identity) {
+    return NextResponse.json(await jsonUnauthorizedDetails(req), {
+      status: 401,
+    });
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
-    const { historyId } = body as { historyId?: string };
+    const raw = (body as { historyId?: string }).historyId;
+    const historyId = typeof raw === 'string' ? raw.trim() : '';
 
-    if (!historyId || typeof historyId !== 'string') {
+    if (!historyId || !/^[\da-f-]{36}$/i.test(historyId)) {
       return NextResponse.json(
         { error: 'historyId is required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const client = getSupabaseClient();
-    if (!client) {
+    const admin = getSupabaseAdminClient();
+    if (!admin) {
       return NextResponse.json(
         { error: 'Database connection not available' },
-        { status: 500 }
+        { status: 503 },
       );
     }
 
-    // Check if this historyId already has a share_id
-    const { data: existing, error: fetchError } = await client
+    const { data: existing, error: fetchError } = await admin
       .from('pp_optimization_history')
-      .select('share_id')
+      .select('share_id, user_id')
       .eq('id', historyId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError) {
+    if (fetchError || !existing) {
       return NextResponse.json(
         { error: 'Optimization not found' },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // If already has a share_id, return it
+    if (existing.user_id !== identity.userId) {
+      return NextResponse.json(
+        { error: 'Optimization not found' },
+        { status: 404 },
+      );
+    }
+
     if (existing.share_id) {
       const shareUrl = `${req.nextUrl.origin}/s/${existing.share_id}`;
       return NextResponse.json({ shareUrl, shareId: existing.share_id });
     }
 
-    // Generate a new share_id
     const shareId = nanoid(10);
 
-    const { error: updateError } = await client
+    const { error: updateError } = await admin
       .from('pp_optimization_history')
       .update({ share_id: shareId })
-      .eq('id', historyId);
+      .eq('id', historyId)
+      .eq('user_id', identity.userId);
 
     if (updateError) {
       return NextResponse.json(
         { error: 'Failed to generate share link' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -62,7 +80,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal server error' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

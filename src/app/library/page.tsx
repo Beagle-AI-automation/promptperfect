@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Bookmark, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bookmark, ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import {
@@ -68,19 +68,36 @@ function modeBadgeLabel(mode: string): string {
 
 function LibraryEmptyState({
   message,
+  description,
   children,
 }: {
   message: string;
+  description?: string;
   children?: ReactNode;
 }) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="rounded-[12px] border border-dashed border-[#2a2a2a] bg-[#090909] px-6 py-14 text-center"
+      className="flex flex-col items-center rounded-2xl border border-dashed border-[#2a2a2a] bg-gradient-to-b from-white/[0.03] to-transparent px-8 py-20 text-center"
     >
-      <p className="text-[15px] font-medium leading-relaxed text-[#ccc]">{message}</p>
-      {children ? <div className="mt-6 flex flex-col items-center gap-3">{children}</div> : null}
+      {/* Icon */}
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#252525] bg-[#111]">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="#4552FF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <p className="font-[family-name:var(--font-space-grotesk),sans-serif] text-[17px] font-semibold text-[#E7E6D9]">
+        {message}
+      </p>
+      {description && (
+        <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-[#71717A]">
+          {description}
+        </p>
+      )}
+      {children ? (
+        <div className="mt-8 flex flex-col items-center gap-3">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -228,21 +245,37 @@ export default function LibraryPage() {
     return (
       <div className="min-h-screen bg-[#050505] px-6 py-12 font-sans text-[#ECECEC]">
         <div className="mx-auto max-w-md text-center">
+          <div className="mb-6">
+            <Link
+              href="/app"
+              className="inline-flex items-center gap-1.5 text-sm text-[#888] transition-colors hover:text-[#ECECEC]"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Back to optimizer
+            </Link>
+          </div>
           <Bookmark className="mx-auto mb-4 h-16 w-16 text-[#4552FF]" strokeWidth={1} aria-hidden />
           <h2 className="mb-2 font-[family-name:var(--font-space-grotesk),sans-serif] text-2xl font-bold text-[#E7E6D9]">
             Your Prompt Library
           </h2>
-          <div className="mb-8">
-            <Link href="/" className="inline-block text-lg font-bold text-[#ECECEC]">
-              PromptPerfect
-            </Link>
-          </div>
-          <LibraryEmptyState message="Sign up to save prompts">
+          <p className="mb-8 text-sm text-[#888]">
+            Save and revisit your best optimized prompts. Create a free account to get started.
+          </p>
+          <LibraryEmptyState
+            message="Sign in to view your saved prompts"
+            description="Create a free account to save and revisit your best optimized prompts across any device."
+          >
             <Link
               href="/signup"
               className="inline-flex h-11 items-center justify-center rounded-[12px] bg-[linear-gradient(135deg,#4552FF,#5c6aff)] px-8 text-[15px] font-semibold text-white transition-opacity hover:opacity-95"
             >
-              Sign up
+              Sign up free
+            </Link>
+            <Link
+              href="/login"
+              className="text-sm text-[#888] hover:text-[#ECECEC] transition-colors"
+            >
+              Already have an account? Log in
             </Link>
           </LibraryEmptyState>
         </div>
@@ -254,8 +287,12 @@ export default function LibraryPage() {
     <div className="min-h-screen bg-[#050505] px-6 py-8 font-sans text-[#ECECEC]">
       <header className="mx-auto mb-8 flex max-w-4xl flex-wrap items-center justify-between gap-4 border-b border-[#1a1a1a] pb-4">
         <div className="flex flex-col gap-1">
-          <Link href="/" className="text-lg font-bold text-[#ECECEC]">
-            PromptPerfect
+          <Link
+            href="/app"
+            className="inline-flex items-center gap-1.5 text-sm text-[#888] transition-colors hover:text-[#ECECEC]"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back to optimizer
           </Link>
           <h1 className="font-[family-name:var(--font-space-grotesk),sans-serif] text-2xl font-bold text-[#E7E6D9]">
             Prompt Library
@@ -314,11 +351,25 @@ export default function LibraryPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-[#888]">Loading…</p>
+          <div className="flex items-center justify-center py-20">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#252525] border-t-[#4552FF]" role="status" aria-label="Loading" />
+          </div>
         ) : error ? (
-          <p className="text-sm text-red-400">{error}</p>
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-center text-sm text-red-400">
+            {error}
+          </div>
         ) : rows.length === 0 ? (
-          <LibraryEmptyState message="No saved prompts yet" />
+          <LibraryEmptyState
+            message="No saved prompts yet"
+            description="After optimizing a prompt, hit the bookmark icon to save it here for quick access later."
+          >
+            <Link
+              href="/app"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#4552FF] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
+            >
+              Start optimizing
+            </Link>
+          </LibraryEmptyState>
         ) : filteredRows.length === 0 ? (
           <p className="py-12 text-center text-sm text-[#71717A]">
             {searchQuery.trim() || modeFilter !== 'all'

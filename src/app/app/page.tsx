@@ -38,10 +38,10 @@ import {
   readEnginePrefs,
 } from '@/lib/client/enginePrefsStorage';
 import {
-  clearPromptPerfectLocalAuth,
   persistEnginePrefsFromAuthUser,
   resolveAuthUserAndSession,
 } from '@/lib/client/ppUserSync';
+import { wipeBrowserSupabaseSession } from '@/lib/client/supabaseBrowserSessionWipe';
 import { readStatsBarCache } from '@/lib/client/statsBarCache';
 import { userFacingOptimizeError } from '@/lib/optimizeUserError';
 import {
@@ -463,12 +463,11 @@ export default function AppPage() {
         persisted?: boolean;
       };
 
-      if (data.persisted === false) {
-        incrementGuestCount();
-      } else if (typeof data.count === 'number') {
+      // Always increment locally by at least 1; use server count only when it's higher.
+      // This prevents the counter from sticking at 1 if the server DB is unavailable.
+      const localNext = incrementGuestCount();
+      if (typeof data.count === 'number' && data.count > localNext) {
         setGuestCount(data.count);
-      } else {
-        incrementGuestCount();
       }
       setGuestUsageVersion((v) => v + 1);
     }
@@ -627,19 +626,16 @@ export default function AppPage() {
     setSigningOut(true);
     const supabase = createSupabaseBrowserClient();
     try {
-      await supabase?.auth.signOut();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
     } finally {
       try {
         localStorage.removeItem('pp_ui_theme');
       } catch {
         // swallow: theme/storage cleanup is best-effort
       }
-      await clearPromptPerfectLocalAuth(null);
-      try {
-        localStorage.removeItem('pp:optimization_session_id');
-      } catch {
-        // swallow: secondary cleanup best-effort after sign-out
-      }
+      wipeBrowserSupabaseSession();
       setSigningOut(false);
       setUser(null);
       router.push('/login');

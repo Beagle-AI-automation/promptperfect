@@ -28,6 +28,7 @@ export function ShareButton({ historyId, disabled = false }: ShareButtonProps) {
       const res = await fetch('/api/share/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ historyId }),
       });
 

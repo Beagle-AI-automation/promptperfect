@@ -58,6 +58,7 @@ export async function resolveIdentity(request: Request): Promise<
       error,
     } = await routeSb.auth.getUser();
 
+    // Trust only server-validated JWT (cookie). Invalid / expired session → no cookie identity.
     if (!error && user?.id) {
       const {
         data: { session },
