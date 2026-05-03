@@ -67,14 +67,115 @@ export function HistoryPanel({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const uid = userId?.trim();
+    const browserSid = historySessionId?.trim() || getOrCreateSessionId() || '';
     const client = createSupabaseBrowserClient();
-    const sid =
-      userId?.trim() ||
-      historySessionId?.trim() ||
-      getOrCreateSessionId() ||
-      '';
 
-    if (!sid) {
+    if (uid) {
+      setLoading(true);
+      try {
+        const headers = client ? await getPromptPerfectAuthHeaders(client) : null;
+
+        // 1. History rows properly linked to this account (user_id set).
+        const apiRowsPromise: Promise<OptimizationHistoryItem[]> = headers
+          ? fetch('/api/history', { headers })
+              .then((r) => (r.ok ? r.json() : Promise.reject()))
+              .then((j: { items?: OptimizationHistoryItem[] }) => j.items ?? [])
+              .catch(() => [])
+          : Promise.resolve([]);
+
+        // 2. Older history rows saved under this browser session (user_id was null before the bug-fix).
+        const sessionRowsPromise: Promise<OptimizationHistoryItem[]> =
+          client && browserSid
+            ? client
+                .from('pp_optimization_history')
+                .select(
+                  'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
+                )
+                .eq('session_id', browserSid)
+                .order('created_at', { ascending: false })
+                .limit(50)
+                .then(({ data }) => (data as OptimizationHistoryItem[]) ?? [])
+                .catch(() => [])
+            : Promise.resolve([]);
+
+        // 3. Library saves — so history is never empty when the user has saved prompts.
+        type LibraryRow = {
+          id: string;
+          title: string;
+          original_prompt: string;
+          optimized_prompt: string;
+          explanation: string;
+          mode: string;
+          created_at: string;
+        };
+        const libraryRowsPromise: Promise<OptimizationHistoryItem[]> = headers
+          ? fetch('/api/saved-prompts', { headers })
+              .then((r) => (r.ok ? r.json() : Promise.reject()))
+              .then((j: { prompts?: LibraryRow[] }) =>
+                (j.prompts ?? []).map((p) => ({
+                  id: `lib-${p.id}`,
+                  session_id: '',
+                  optimize_session_id: null,
+                  prompt_original: p.original_prompt,
+                  prompt_optimized: p.optimized_prompt,
+                  mode: p.mode,
+                  explanation: p.explanation ?? '',
+                  created_at: p.created_at,
+                })),
+              )
+              .catch(() => [])
+          : Promise.resolve([]);
+
+        const [apiRows, sessionRows, libraryRows] = await Promise.all([
+          apiRowsPromise,
+          sessionRowsPromise,
+          libraryRowsPromise,
+        ]);
+
+        // Merge history rows first (they carry delete buttons).
+        const seen = new Set<string>();
+        const seenPrompts = new Set<string>();
+        const merged: OptimizationHistoryItem[] = [];
+
+        for (const row of [...apiRows, ...sessionRows]) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id);
+            // Track the prompt text so library duplicates are skipped below.
+            const key = row.prompt_original.trim().slice(0, 200);
+            if (key) seenPrompts.add(key);
+            merged.push(row);
+          }
+        }
+
+        // Only add a library item when there is no matching history entry,
+        // preventing duplicates when a prompt is both optimized and saved.
+        for (const row of libraryRows) {
+          if (!seen.has(row.id)) {
+            const key = row.prompt_original.trim().slice(0, 200);
+            if (!seenPrompts.has(key)) {
+              seen.add(row.id);
+              seenPrompts.add(key);
+              merged.push(row);
+            }
+          }
+        }
+
+        merged.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setRows(merged.slice(0, 50));
+      } catch {
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Guest: session-scoped local + Supabase query.
+    if (!browserSid) {
       setRows([]);
       setLoading(false);
       return;
@@ -82,13 +183,17 @@ export function HistoryPanel({
 
     setLoading(true);
     try {
-      const localRows = getLocalHistoryForSession(sid);
+      const localRows = getLocalHistoryForSession(browserSid);
       if (!client) {
-        const merged = [...localRows].sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        setRows(
+          [...localRows]
+            .sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+            )
+            .slice(0, 20),
         );
-        setRows(merged.slice(0, 20));
         return;
       }
 
@@ -97,7 +202,7 @@ export function HistoryPanel({
         .select(
           'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
         )
-        .eq('session_id', sid)
+        .eq('session_id', browserSid)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -109,12 +214,15 @@ export function HistoryPanel({
       );
       setRows(merged.slice(0, 20));
     } catch {
-      const localRows = getLocalHistoryForSession(sid);
-      const merged = [...localRows].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      const localRows = getLocalHistoryForSession(browserSid);
+      setRows(
+        [...localRows]
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          )
+          .slice(0, 20),
       );
-      setRows(merged.slice(0, 20));
     } finally {
       setLoading(false);
     }
@@ -195,7 +303,7 @@ export function HistoryPanel({
                       {item.mode} · {formatTime(item.created_at)}
                     </p>
                   </button>
-                  {userId?.trim() ? (
+                  {userId?.trim() && !item.id.startsWith('lib-') ? (
                     <button
                       type="button"
                       aria-label="Delete from history"

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+/** Page routes that require a Supabase session (userId from cookie JWT only). */
 const PROTECTED = ['/app', '/library', '/history', '/profile', '/control-room'];
 
 const corsHeaders = {
@@ -43,7 +44,7 @@ export async function proxy(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
+  const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isProtected && !user) {
     const login = req.nextUrl.clone();
     login.pathname = '/login';
@@ -57,10 +58,15 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     '/api/:path*',
+    '/app',
     '/app/:path*',
+    '/library',
     '/library/:path*',
+    '/history',
     '/history/:path*',
+    '/profile',
     '/profile/:path*',
+    '/control-room',
     '/control-room/:path*',
   ],
 };

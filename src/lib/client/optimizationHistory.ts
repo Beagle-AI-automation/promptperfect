@@ -125,21 +125,26 @@ export async function saveToHistory(params: {
   /** Same id sent to `/api/optimize` as `session_id` — matches `optimization_logs.session_id` for feedback. */
   optimizeSessionId?: string;
 }): Promise<string | null> {
-  const session_id = getOrCreateSessionId();
+  const session_id = params.sessionId?.trim() || getOrCreateSessionId();
   if (!session_id) return null;
 
   const client = getSupabaseClient();
   if (client) {
     try {
+      const row: Record<string, unknown> = {
+        session_id,
+        prompt_original: params.prompt_original,
+        prompt_optimized: params.prompt_optimized,
+        mode: params.mode,
+        explanation: params.explanation,
+      };
+      if (params.userId) row.user_id = params.userId;
+      if (params.provider) row.provider = params.provider;
+      if (params.optimizeSessionId) row.optimize_session_id = params.optimizeSessionId;
+
       const { data, error } = await client
         .from('pp_optimization_history')
-        .insert({
-          session_id,
-          prompt_original: params.prompt_original,
-          prompt_optimized: params.prompt_optimized,
-          mode: params.mode,
-          explanation: params.explanation,
-        })
+        .insert(row)
         .select('id')
         .single();
 

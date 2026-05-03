@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Provider } from '@/lib/types';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
@@ -31,11 +31,12 @@ export default function ControlRoomPage() {
   const [user, setUser] = useState<{ id: string; provider: string; api_key?: string } | null>(null);
   const [provider, setProvider] = useState<Provider>('gemini');
   const [apiKey, setApiKey] = useState('');
-  const [verifyStep, setVerifyStep] = useState(0);
-  const [verifyRunning, setVerifyRunning] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState<'idle' | 'checking' | 'ok' | 'fail'>(
+    'idle',
+  );
+  const [verifyMessage, setVerifyMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [continueError, setContinueError] = useState('');
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -78,24 +79,29 @@ export default function ControlRoomPage() {
     };
   }, [mounted, router]);
 
-  useEffect(() => {
-    return () => {
-      timersRef.current.forEach(clearTimeout);
-    };
-  }, []);
-
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (provider === 'gemini') return;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    setVerifyRunning(true);
-    setVerifyStep(0);
-    const t0 = setTimeout(() => setVerifyStep(1), 0);
-    const t1 = setTimeout(() => setVerifyStep(2), 600);
-    const t2 = setTimeout(() => setVerifyStep(3), 1200);
-    const t3 = setTimeout(() => setVerifyStep(4), 1800);
-    const t4 = setTimeout(() => setVerifyRunning(false), 2400);
-    timersRef.current = [t0, t1, t2, t3, t4];
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      setVerifyStatus('fail');
+      setVerifyMessage('Enter an API key to verify');
+      return;
+    }
+    setVerifyStatus('checking');
+    setVerifyMessage('');
+    const payload = await fetch('/api/verify-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, apiKey: trimmed }),
+    })
+      .then((res) => res.json())
+      .catch(() => ({ ok: false as const, reason: 'Provider unreachable' }));
+
+    const ok = payload?.ok === true;
+    setVerifyStatus(ok ? 'ok' : 'fail');
+    setVerifyMessage(
+      ok ? 'Provider reachable' : typeof payload?.reason === 'string' ? payload.reason : 'Provider unreachable',
+    );
   };
 
   const handleContinue = async () => {
@@ -169,6 +175,8 @@ export default function ControlRoomPage() {
               onClick={() => {
                 setProvider(p);
                 setContinueError('');
+                setVerifyStatus('idle');
+                setVerifyMessage('');
               }}
               className={`rounded-xl border-2 bg-zinc-900/80 p-4 text-left transition ${
                 provider === p
@@ -223,42 +231,41 @@ export default function ControlRoomPage() {
                   <input
                     type="password"
                     value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
+                    onChange={(e) => {
+                      setApiKey(e.target.value);
+                      setVerifyStatus('idle');
+                      setVerifyMessage('');
+                    }}
                     placeholder="sk-..."
                     className="mt-1 w-full rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-[#ECECEC] placeholder-zinc-500 focus:border-[#4552FF] focus:outline-none"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={handleVerify}
-                  disabled={verifyRunning}
+                  onClick={() => void handleVerify()}
+                  disabled={verifyStatus === 'checking'}
                   className="rounded border border-zinc-600 bg-zinc-800 px-4 py-2 text-[#ECECEC] hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  Verify Connection
+                  {verifyStatus === 'checking' ? 'Verifying…' : 'Verify Connection'}
                 </button>
               </div>
             </div>
 
-            {verifyStep > 0 && (
-              <div className="mt-4 space-y-2 font-mono text-sm">
-                {verifyStep >= 1 && (
-                  <p className="animate-[fade-in_0.3s_ease-out_forwards] text-zinc-400">
-                    Connecting to {provider === 'openai' ? 'OpenAI' : 'Anthropic'}...
-                  </p>
+            {verifyStatus !== 'idle' && (
+              <div className="mt-4 font-mono text-sm">
+                {verifyStatus === 'checking' && (
+                  <p className="text-zinc-400">Checking provider…</p>
                 )}
-                {verifyStep >= 2 && (
-                  <p className="animate-[fade-in_0.3s_ease-out_forwards] text-[#22c55e]">
-                    ✓ Provider reachable
-                  </p>
+                {verifyStatus === 'ok' && (
+                  <p className="text-[#22c55e]">✓ {verifyMessage}</p>
                 )}
-                {verifyStep >= 3 && (
-                  <p className="animate-[fade-in_0.3s_ease-out_forwards] text-[#22c55e]">
-                    ✓ Key format valid
-                  </p>
-                )}
-                {verifyStep >= 4 && (
-                  <p className="animate-[fade-in_0.3s_ease-out_forwards] text-[#22c55e]">
-                    ✓ Ready to optimize
+                {verifyStatus === 'fail' && (
+                  <p
+                    className={
+                      verifyMessage === 'Invalid key' ? 'text-amber-400' : 'text-red-400'
+                    }
+                  >
+                    {verifyMessage === 'Invalid key' ? '✗ Invalid key' : `✗ ${verifyMessage}`}
                   </p>
                 )}
               </div>

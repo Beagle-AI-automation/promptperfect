@@ -26,9 +26,13 @@ export async function POST(request: Request) {
         ? body.targetSessionId.trim()
         : '';
 
+    const isValidGuestId =
+      guestId.length > 0 &&
+      guestId.length <= 80 &&
+      // Accept UUID format (e.g. crypto.randomUUID()) or legacy 'guest_' / 'guest-' prefixed IDs
+      (/^[0-9a-f-]{36}$/i.test(guestId) || guestId.startsWith('guest'));
     if (
-      !guestId.startsWith('guest_') ||
-      guestId.length > 80 ||
+      !isValidGuestId ||
       !targetSessionId ||
       targetSessionId.length > 200 ||
       guestId === targetSessionId
