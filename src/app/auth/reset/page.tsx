@@ -24,17 +24,24 @@ export default function AuthResetPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
-    if (!supabase) return;
+    const client = supabase;
+    if (!client) return;
 
     let cancelled = false;
 
     async function initRecoverySession() {
+      const authClient = client;
+      if (!authClient) {
+        if (!cancelled) setSessionReady(true);
+        return;
+      }
+
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
 
       if (code) {
         const { error: exchangeErr } =
-          await supabase.auth.exchangeCodeForSession(code);
+          await authClient.auth.exchangeCodeForSession(code);
         if (!cancelled && exchangeErr) {
           setError(
             'This reset link is invalid or expired. Request a new link from the forgot-password page.',
@@ -46,7 +53,7 @@ export default function AuthResetPage() {
 
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await authClient.auth.getSession();
 
       if (!cancelled && !session) {
         setError(
