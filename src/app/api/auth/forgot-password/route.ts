@@ -124,7 +124,7 @@ export async function POST(request: Request) {
   const identities = linkData.user.identities ?? [];
   const signedUpWithGoogleOnly =
     identities.length > 0 &&
-    identities.every((i) => i.provider === 'google');
+    identities.every((i: { provider?: string }) => i.provider === 'google');
 
   const anon = createClient(url, anonKey, {
     auth: {
