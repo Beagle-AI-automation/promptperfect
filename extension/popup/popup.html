@@ -205,6 +205,17 @@
     }
     #connStatus.connected { color: #22c55e; }
     #connStatus.disconnected { color: #ef4444; }
+    #apiKeyHint {
+      margin: 0 0 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #1a1408;
+      border: 1px solid #422006;
+      color: #fbbf24;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    #apiKeyHint[hidden] { display: none; }
 
     /* ── Footer ── */
     footer {
@@ -264,10 +275,19 @@
   <details id="settingsPanel">
     <summary>⚙ Settings</summary>
     <div class="settings-body">
+      <p id="apiKeyHint" hidden>
+        Add your Gemini, OpenAI, or Anthropic API key below — the extension cannot use web-app sign-in.
+      </p>
       <label for="apiUrl">API URL</label>
       <input type="text" id="apiUrl" placeholder="https://promptperfect-beaglecorp.vercel.app" />
-      <label for="apiKey">API Key <span style="color:#52525b;font-weight:400">(BYOK — optional)</span></label>
-      <input type="password" id="apiKey" placeholder="Leave empty to use default Gemini" />
+      <label for="provider">Provider</label>
+      <select id="provider" aria-label="API provider">
+        <option value="gemini">Gemini</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+      </select>
+      <label for="apiKey">API key <span style="color:#52525b;font-weight:400">(required)</span></label>
+      <input type="password" id="apiKey" placeholder="Paste your provider API key" autocomplete="off" />
       <button type="button" id="save">Save settings</button>
       <p id="connStatus"></p>
     </div>

@@ -1,5 +1,8 @@
 import { checkRateLimit } from '@/lib/auth/rateLimit';
-import { getPasswordResetOrigin } from '@/lib/auth/oauthRedirect';
+import {
+  mapPasswordResetEmailError,
+  resolvePasswordResetRedirect,
+} from '@/lib/auth/passwordResetRedirect';
 import { validateEmail } from '@/lib/auth/validation';
 import {
   getSupabaseAdminClient,
@@ -9,11 +12,19 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
+function isLocalRedirect(redirectTo: string): boolean {
+  try {
+    const host = new URL(redirectTo).hostname;
+    return host === 'localhost' || host === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Sends Supabase password recovery email using a server-built redirect URL
- * (must match Authentication → Redirect URLs). Verifies the email exists in
- * Supabase Auth (`auth.users`) via admin `generateLink` so OAuth-only and
- * email users are included—not only rows in the app user / profile tables.
+ * Password recovery: admin generateLink (verifies user + builds link), then
+ * resetPasswordForEmail (sends mail). On localhost, also returns recoveryLink
+ * when Supabase email is rate-limited or undelivered.
  */
 export async function POST(request: Request) {
   const ip =
@@ -27,9 +38,12 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     email?: string;
+    redirectTo?: string;
   } | null;
   const raw = typeof body?.email === 'string' ? body.email.trim() : '';
   const email = raw.toLowerCase();
+  const clientRedirectTo =
+    typeof body?.redirectTo === 'string' ? body.redirectTo.trim() : undefined;
 
   if (!validateEmail(email)) {
     return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
@@ -49,14 +63,14 @@ export async function POST(request: Request) {
           'Password reset is temporarily unavailable (server configuration).',
         code: 'SERVICE_KEY_REQUIRED',
         hint:
-          'Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY so we can verify your account before sending a reset link.',
+          'Set SUPABASE_SERVICE_ROLE_KEY in .env.local (Supabase → Settings → API → service_role secret).',
       },
       { status: 503 },
     );
   }
 
-  const origin = getPasswordResetOrigin(request).replace(/\/$/, '');
-  const redirectTo = `${origin}/auth/reset`;
+  const redirectTo = resolvePasswordResetRedirect(request, clientRedirectTo);
+  const localDev = isLocalRedirect(redirectTo);
 
   const { data: linkData, error: genError } =
     await admin.auth.admin.generateLink({
@@ -77,15 +91,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'No account exists for this email address. Check spelling or create an account.',
+            'No account exists for this email. Sign up first, or use Continue with Google on the login page if you registered that way.',
           code: 'ACCOUNT_NOT_FOUND',
         },
         { status: 404 },
       );
     }
     console.error('[forgot-password] generateLink error:', genError.message);
+    const mapped = mapPasswordResetEmailError(genError.message, redirectTo);
     return NextResponse.json(
-      { error: 'Could not verify account. Please try again.', code: 'LOOKUP_FAILED' },
+      { error: mapped.error, code: mapped.code },
       { status: 400 },
     );
   }
@@ -94,12 +109,22 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          'No account exists for this email address. Check spelling or create an account.',
+          'No account exists for this email. Sign up first, or use Continue with Google on the login page.',
         code: 'ACCOUNT_NOT_FOUND',
       },
       { status: 404 },
     );
   }
+
+  const recoveryLink =
+    typeof linkData.properties?.action_link === 'string'
+      ? linkData.properties.action_link
+      : undefined;
+
+  const identities = linkData.user.identities ?? [];
+  const signedUpWithGoogleOnly =
+    identities.length > 0 &&
+    identities.every((i) => i.provider === 'google');
 
   const anon = createClient(url, anonKey, {
     auth: {
@@ -109,25 +134,51 @@ export async function POST(request: Request) {
     },
   });
 
-  const { error } = await anon.auth.resetPasswordForEmail(email, {
+  const { error: emailError } = await anon.auth.resetPasswordForEmail(email, {
     redirectTo,
   });
 
-  if (error) {
-    const msg = error.message?.trim() || '';
-    const lower = msg.toLowerCase();
-    console.error('[forgot-password] resetPasswordForEmail error:', msg);
-    const isRedirectIssue = /redirect|url/i.test(lower);
-    return NextResponse.json(
-      {
-        error: isRedirectIssue
-          ? `Reset email blocked: the redirect URL is not in your Supabase allowlist. Add "${redirectTo}" to Supabase → Authentication → URL Configuration → Redirect URLs.`
-          : 'Could not send reset email. Please try again later.',
-        code: 'RESET_EMAIL_FAILED',
-      },
-      { status: 400 },
-    );
+  if (!emailError) {
+    return NextResponse.json({
+      ok: true,
+      emailSent: true,
+      ...(localDev && recoveryLink ? { recoveryLink } : {}),
+      googleOnlyHint: signedUpWithGoogleOnly
+        ? 'This account uses Google sign-in. You can still set a password from the reset link, or use Continue with Google on the login page.'
+        : undefined,
+    });
   }
 
-  return NextResponse.json({ ok: true });
+  const msg = emailError.message?.trim() || '';
+  console.error('[forgot-password] resetPasswordForEmail error:', msg);
+  const mapped = mapPasswordResetEmailError(msg, redirectTo);
+
+  // Local dev: Supabase rate-limits emails (~1/min) but generateLink still works.
+  // Return the direct recovery link so you can reset without waiting on mail.
+  if (localDev && recoveryLink) {
+    return NextResponse.json({
+      ok: true,
+      emailSent: false,
+      recoveryLink,
+      code: mapped.code,
+      message: mapped.error,
+      googleOnlyHint: signedUpWithGoogleOnly
+        ? 'This account uses Google sign-in. Open the link below to set a password, or use Continue with Google.'
+        : undefined,
+    });
+  }
+
+  return NextResponse.json(
+    {
+      error: mapped.error,
+      code: mapped.code,
+      hint:
+        mapped.code === 'REDIRECT_NOT_ALLOWLISTED'
+          ? `Add "${redirectTo}" in Supabase → Authentication → URL Configuration → Redirect URLs.`
+          : mapped.code === 'EMAIL_RATE_LIMIT'
+            ? 'Wait one minute, then try again. Check spam for an earlier email.'
+            : 'Ask your project admin to enable Auth emails or custom SMTP in Supabase.',
+    },
+    { status: 400 },
+  );
 }

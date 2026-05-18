@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { DocsCodeBlock } from '@/components/DocsCodeBlock';
+
 export const metadata: Metadata = {
   title: 'API Documentation — PromptPerfect by Beagle',
   description:
@@ -8,14 +10,6 @@ export const metadata: Metadata = {
 };
 
 const BASE = 'https://promptperfect-beaglecorp.vercel.app';
-
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="mt-3 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-left text-[12px] leading-relaxed text-zinc-200 sm:p-4 sm:text-[13px]">
-      <code className="font-mono whitespace-pre">{children}</code>
-    </pre>
-  );
-}
 
 function SectionTitle({
   id,
@@ -198,7 +192,7 @@ export default function DocsPage() {
               Core fields (TypeScript-style). Unknown <code className="rounded bg-zinc-900 px-1 py-0.5">mode</code>{' '}
               values fall back to <code className="rounded bg-zinc-900 px-1 py-0.5">better</code>.
             </p>
-            <CodeBlock>{`{
+            <DocsCodeBlock>{`{
   /** Input prompt (preferred) */
   text: string;
   /** Alias accepted for compatibility */
@@ -208,7 +202,7 @@ export default function DocsPage() {
   apiKey?: string;
   session_id?: string;
   version?: 'v1' | 'v2';
-}`}</CodeBlock>
+}`}</DocsCodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Response body (200)</h3>
             <p className="mt-2 text-sm text-zinc-400">
@@ -217,7 +211,7 @@ export default function DocsPage() {
               usually starts with <code className="rounded bg-zinc-900 px-1 py-0.5">&quot;- &quot;</code>
               ). Split on newlines if you need a list. Extra fields help with debugging and logging.
             </p>
-            <CodeBlock>{`{
+            <DocsCodeBlock>{`{
   optimizedText: string;
   explanation: string;
   /** Bullet-style lines joined with newlines (not a JSON array) */
@@ -225,7 +219,7 @@ export default function DocsPage() {
   rawText: string;
   provider: string;
   model: string;
-}`}</CodeBlock>
+}`}</DocsCodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Errors</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-400">
@@ -242,21 +236,21 @@ export default function DocsPage() {
             </ul>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">cURL</h3>
-            <CodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
+            <DocsCodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
   -H "Content-Type: application/json" \\
   -d '{
     "text": "Write me something about our product.",
     "mode": "better",
     "provider": "gemini"
-  }'`}</CodeBlock>
+  }'`}</DocsCodeBlock>
             <p className="mt-2 text-xs text-zinc-500">With BYOK via header:</p>
-            <CodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
+            <DocsCodeBlock>{`curl -sS -X POST "${BASE}/api/optimize-sync" \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_GEMINI_OR_OPENAI_KEY" \\
-  -d '{"text":"Summarize this email in 3 bullets.","mode":"specific","provider":"openai"}'`}</CodeBlock>
+  -d '{"text":"Summarize this email in 3 bullets.","mode":"specific","provider":"openai"}'`}</DocsCodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">JavaScript</h3>
-            <CodeBlock>{`const res = await fetch(\`${BASE}/api/optimize-sync\`, {
+            <DocsCodeBlock>{`const res = await fetch(\`${BASE}/api/optimize-sync\`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -275,10 +269,10 @@ if (!res.ok) {
 }
 
 const data = await res.json();
-console.log(data.optimizedText, data.explanation, data.changes);`}</CodeBlock>
+console.log(data.optimizedText, data.explanation, data.changes);`}</DocsCodeBlock>
 
             <h3 className="mt-10 text-base font-semibold text-[#ECECEC]">Python</h3>
-            <CodeBlock>{`import requests
+            <DocsCodeBlock>{`import requests
 
 url = "${BASE}/api/optimize-sync"
 payload = {
@@ -295,7 +289,7 @@ r.raise_for_status()
 data = r.json()
 print(data["optimizedText"])
 print(data["explanation"])
-print(data["changes"])`}</CodeBlock>
+print(data["changes"])`}</DocsCodeBlock>
           </section>
 
           <section id="modes" className="scroll-mt-6">
@@ -308,24 +302,24 @@ print(data["changes"])`}</CodeBlock>
             <ul className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-300">
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
                 <span className="font-mono text-[#4552FF]">better</span>
-                <p className="mt-2 text-zinc-400">
+                <div className="mt-2 text-zinc-400">
                   General upgrade: clearer, more effective wording while keeping the user&apos;s intent.
                   Good default when you are not sure which lens to use.
-                </p>
+                </div>
               </li>
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
                 <span className="font-mono text-[#4552FF]">specific</span>
-                <p className="mt-2 text-zinc-400">
+                <div className="mt-2 text-zinc-400">
                   Pushes for constraints, audience, format, success criteria, edge cases, and measurable
                   outcomes so the model has less room to guess.
-                </p>
+                </div>
               </li>
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
                 <span className="font-mono text-[#4552FF]">cot</span>
-                <p className="mt-2 text-zinc-400">
+                <div className="mt-2 text-zinc-400">
                   Chain-of-thought style: encourages step-by-step reasoning, checking intermediate
                   steps, or &quot;think through X before Y&quot; without pointless bloat.
-                </p>
+                </div>
               </li>
             </ul>
             <p className="mt-6 text-sm text-zinc-500">

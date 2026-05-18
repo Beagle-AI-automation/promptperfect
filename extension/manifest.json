@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "PromptPerfect — AI Prompt Optimizer",
-  "version": "1.1.0",
-  "description": "Optimize your prompts anywhere with one click",
+  "version": "1.2.0",
+  "description": "Optimize your prompts on ChatGPT, Gmail, Notion, and more with one click",
   "permissions": ["activeTab", "storage"],
-  "host_permissions": ["http://*/*", "https://*/*"],
+  "host_permissions": ["http://localhost/*", "https://*/*"],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
@@ -15,9 +15,28 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://mail.google.com/*",
+        "https://docs.google.com/*",
+        "https://www.notion.so/*",
+        "https://notion.so/*",
+        "https://twitter.com/*",
+        "https://x.com/*",
+        "https://promptperfect.vercel.app/*",
+        "https://promptperfect-beaglecorp.vercel.app/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "exclude_matches": [
+        "chrome://*/*",
+        "chrome-extension://*/*",
+        "https://chrome.google.com/*"
+      ],
       "js": ["content/universal.js"],
-      "css": ["styles/button.css"]
+      "css": ["styles/button.css"],
+      "run_at": "document_idle"
     }
   ],
   "background": {

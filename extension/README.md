@@ -2,7 +2,9 @@
 
 Inject an **✨ Optimize** button into any text field on the page (ChatGPT, Gmail, Notion, etc.). One click sends the text to your PromptPerfect API and replaces the field with the optimized prompt.
 
-**Default API URL:** `https://promptperfect.vercel.app` (change in the extension popup for self‑hosted or local dev).
+**Default API URL:** `https://promptperfect-beaglecorp.vercel.app` (change in the extension popup for self‑hosted or local dev).
+
+**API key required:** The extension uses BYOK (your Gemini / OpenAI / Anthropic key). Web-app sign-in does not apply inside the extension.
 
 ---
 
@@ -43,9 +45,10 @@ Add images under `extension/screenshots/` and reference them in the Web Store li
 
 5. **First-time settings**  
    - Click the PromptPerfect icon in the toolbar  
-   - **API URL** should default to `https://promptperfect.vercel.app`  
-   - For a local app, set to `http://localhost:3000` (or your dev URL) and click **Save**  
-   - Status should show **Connected** if the API is reachable
+   - **API URL** should default to `https://promptperfect-beaglecorp.vercel.app`  
+   - Choose **Provider** and paste your **API key** (required)  
+   - For a local app, set API URL to `http://localhost:3000` and click **Save**  
+   - Status should show **API reachable** if the server responds
 
 6. **Reload after code changes**  
    - On `chrome://extensions`, click **Reload** on the PromptPerfect card whenever you change files in `extension/`
@@ -97,7 +100,7 @@ Theme: `#050505` backgrounds in popup, **`#4552FF`** accent — matches the web 
 Run through these steps after every `Load unpacked` reload.
 
 1. **Load unpacked** — `chrome://extensions` → Developer mode → Load unpacked → select `extension/` (the folder containing `manifest.json`). Extension card appears with no errors.
-2. **Settings check** — Click the extension icon → expand **⚙ Settings** → confirm API URL defaults to `https://promptperfect.vercel.app` → **✅ Connected** appears. Optionally paste a BYOK key and Save.
+2. **Settings check** — Click the extension icon → expand **⚙ Settings** → confirm API URL → paste API key + provider → **Save** → **✅ API reachable · key saved**.
 3. **Popup optimize** — In the popup, paste any prompt into the **Prompt** textarea → **✨ Optimize** button enables → click it → optimized result appears in the **Result** box within 10 s.
 4. **Stateless check** — Close the popup, reopen it → textarea is empty, result is gone, no history panel visible.
 5. **On-page button** — Focus any text field on ChatGPT / Gmail / Notion → **✨ Optimize** button appears below it → click → spinner shows → result replaces the field text + green toast.
@@ -108,8 +111,11 @@ Run through these steps after every `Load unpacked` reload.
 
 | Issue | What to try |
 |-------|----------------|
+| `401` / sign in message | Add your **API key** in Settings — extension cannot use web login |
+| Provider mismatch | Gemini key → Provider **Gemini**; same for OpenAI / Anthropic |
 | Optimize does nothing | Check API URL and **Reload** extension after changing settings |
-| Not connected | API must expose `/api/optimize-sync` with CORS (included in PromptPerfect app) |
+| Not connected | API must expose `/api/config` and `/api/optimize-sync` (included in PromptPerfect app) |
+| Button missing on a site | Extension only runs on ChatGPT, Gmail, Docs, Notion, X, and localhost — see `manifest.json` |
 | Wrong project | Ensure **API URL** matches where the app is deployed |
 
 ## Files
