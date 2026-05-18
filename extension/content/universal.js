@@ -1,6 +1,20 @@
 (function () {
   'use strict';
 
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.runtime?.id ||
+    location.protocol === 'chrome:' ||
+    location.protocol === 'chrome-extension:' ||
+    location.protocol === 'about:'
+  ) {
+    return;
+  }
+
+  if (/\/docs(\/|$)/.test(location.pathname)) {
+    return;
+  }
+
   const BUTTON_ID = 'pp-optimize-btn';
   let hideTimeout = null;
   let currentTarget = null;
@@ -8,11 +22,47 @@
 
   function isTextInput(el) {
     if (!el || !el.tagName) return false;
+    if (el.disabled || el.readOnly) return false;
     const tag = el.tagName.toLowerCase();
     const type = (el.type || '').toLowerCase();
+    const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
+    if (autocomplete.includes('password') || autocomplete.startsWith('cc-')) {
+      return false;
+    }
     if (tag === 'textarea') return true;
-    if (tag === 'input' && (type === 'text' || type === 'search' || type === 'email' || type === 'url'))
+    if (
+      tag === 'input' &&
+      (type === 'text' ||
+        type === 'search' ||
+        type === 'email' ||
+        type === 'url' ||
+        type === '')
+    ) {
       return true;
+    }
+    if (tag === 'input') {
+      const skipTypes = [
+        'password',
+        'hidden',
+        'checkbox',
+        'radio',
+        'file',
+        'submit',
+        'button',
+        'reset',
+        'number',
+        'tel',
+        'date',
+        'time',
+        'datetime-local',
+        'month',
+        'week',
+        'color',
+        'range',
+      ];
+      if (skipTypes.includes(type)) return false;
+      return false;
+    }
     if (el.isContentEditable) return true;
     return false;
   }
@@ -180,7 +230,10 @@
         const response = await sendOptimizeMessage(text.trim());
 
         if (response && response.error) {
-          showNotification('Optimization failed: ' + response.error, 'error');
+          const errText = String(response.error);
+          const short =
+            errText.length > 120 ? errText.slice(0, 117) + '…' : errText;
+          showNotification(short, 'error');
           return;
         }
 

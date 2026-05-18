@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { buildPasswordResetRedirectUrl } from '@/lib/auth/passwordResetRedirect';
 import { AuthShell } from '@/components/auth/AuthShell';
 import {
   authInputClass,
@@ -14,18 +16,39 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const [recoveryLink, setRecoveryLink] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(true);
+  const [googleHint, setGoogleHint] = useState<string | null>(null);
 
-  const configured = useMemo(() => {
-    return Boolean(
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    );
-  }, []);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const configured = useMemo(() => Boolean(supabase), [supabase]);
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1');
+
+  useEffect(() => {
+    if (cooldownSec <= 0) return;
+    const t = window.setInterval(() => {
+      setCooldownSec((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [cooldownSec]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!configured) {
+    setRecoveryLink(null);
+    setGoogleHint(null);
+
+    if (cooldownSec > 0) {
+      setError(
+        `Please wait ${cooldownSec} seconds before requesting another reset.`,
+      );
+      return;
+    }
+    if (!configured || !supabase) {
       setError('Supabase is not configured');
       return;
     }
@@ -35,26 +58,44 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    const redirectTo =
+      typeof window !== 'undefined'
+        ? buildPasswordResetRedirectUrl(window.location.origin)
+        : undefined;
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({ email: trimmed, redirectTo }),
       });
       const data = (await res.json()) as {
         error?: string;
         hint?: string;
         code?: string;
+        ok?: boolean;
+        emailSent?: boolean;
+        recoveryLink?: string;
+        message?: string;
+        googleOnlyHint?: string;
       };
 
       if (!res.ok) {
+        if (data.code === 'EMAIL_RATE_LIMIT') {
+          const secMatch = data.error?.match(/Wait (\d+) seconds/i);
+          setCooldownSec(secMatch ? Number(secMatch[1]) : 60);
+        }
         const parts = [data.error || 'Something went wrong'];
         if (data.hint) parts.push(data.hint);
         setError(parts.join(' '));
         return;
       }
 
+      if (data.googleOnlyHint) setGoogleHint(data.googleOnlyHint);
+      setEmailSent(data.emailSent !== false);
+      if (data.recoveryLink) setRecoveryLink(data.recoveryLink);
+      if (data.message && !data.emailSent) setError(data.message);
       setSent(true);
     } finally {
       setLoading(false);
@@ -101,10 +142,14 @@ export default function ForgotPasswordPage() {
             )}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || cooldownSec > 0}
               className={authPrimaryBtnClass}
             >
-              {loading ? 'Sending…' : 'Send reset link'}
+              {loading
+                ? 'Sending…'
+                : cooldownSec > 0
+                  ? `Wait ${cooldownSec}s…`
+                  : 'Send reset link'}
             </button>
           </form>
         </>
@@ -117,13 +162,45 @@ export default function ForgotPasswordPage() {
             ✓
           </div>
           <h1 className="text-center font-heading text-2xl font-semibold tracking-tight text-[#E7E6D9]">
-            Check your email
+            {emailSent ? 'Check your email' : 'Reset link ready'}
           </h1>
-          <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
-            We sent a password reset link to{' '}
-            <span className="font-medium text-[#E7E6D9]">{email.trim()}</span>.
-            Open it to choose a new password (link expires after a while).
-          </p>
+          {emailSent ? (
+            <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
+              We sent a password reset link to{' '}
+              <span className="font-medium text-[#E7E6D9]">{email.trim()}</span>.
+              Open it to choose a new password (check spam too).
+            </p>
+          ) : (
+            <p className="mt-3 text-center text-sm leading-relaxed text-[#B0B0B0]">
+              Supabase did not send another email (rate limit or mail delay). On
+              localhost you can use the direct link below instead.
+            </p>
+          )}
+          {error && (
+            <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200">
+              {error}
+            </p>
+          )}
+          {googleHint && (
+            <p className="mt-3 text-center text-sm text-[#B0B0B0]">{googleHint}</p>
+          )}
+          {recoveryLink && isLocalhost && (
+            <div className="mt-4 rounded-lg border border-[#4552FF]/30 bg-[#4552FF]/10 p-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#71717A]">
+                Local dev — direct reset link
+              </p>
+              <a
+                href={recoveryLink}
+                className="break-all text-sm text-[#4552FF] hover:underline"
+              >
+                Open password reset link
+              </a>
+              <p className="mt-2 text-xs text-[#71717A]">
+                Use this when Supabase email does not arrive. Link expires after
+                a short time.
+              </p>
+            </div>
+          )}
           <Link
             href="/login"
             className={`${authPrimaryBtnClass} mt-8 block text-center no-underline`}

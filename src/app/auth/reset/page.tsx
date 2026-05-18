@@ -1,61 +1,102 @@
-'use client'
+'use client';
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import { validatePassword } from '@/lib/auth/validation'
-import { AuthShell } from '@/components/auth/AuthShell'
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
+import { validatePassword } from '@/lib/auth/validation';
+import { AuthShell } from '@/components/auth/AuthShell';
 import {
   authInputClass,
   authLabelClass,
   authPrimaryBtnClass,
-} from '@/components/auth/auth-styles'
+} from '@/components/auth/auth-styles';
 
 export default function AuthResetPage() {
-  const router = useRouter()
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const router = useRouter();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !key) return null
-    return createBrowserClient(url, key)
-  }, [])
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
-    if (!supabase) return
-    void supabase.auth.getSession()
-  }, [supabase])
+    if (!supabase) return;
+
+    let cancelled = false;
+
+    async function initRecoverySession() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        const { error: exchangeErr } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!cancelled && exchangeErr) {
+          setError(
+            'This reset link is invalid or expired. Request a new link from the forgot-password page.',
+          );
+          setSessionReady(true);
+          return;
+        }
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!cancelled && !session) {
+        setError(
+          'Open the password reset link from your email in this browser. If it expired, request a new one.',
+        );
+      }
+
+      if (!cancelled) setSessionReady(true);
+    }
+
+    void initRecoverySession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError('');
     if (!supabase) {
-      setError('Supabase is not configured')
-      return
+      setError('Supabase is not configured');
+      return;
     }
-    const v = validatePassword(password)
+    const v = validatePassword(password);
     if (!v.isValid) {
-      setError(v.errors[0] ?? 'Invalid password')
-      return
+      setError(v.errors[0] ?? 'Invalid password');
+      return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
+      setError('Passwords do not match');
+      return;
     }
-    setLoading(true)
-    const { error: err } = await supabase.auth.updateUser({ password })
-    setLoading(false)
+    setLoading(true);
+    const { error: err } = await supabase.auth.updateUser({ password });
+    setLoading(false);
     if (err) {
-      setError(err.message)
-      return
+      setError(err.message);
+      return;
     }
-    setSuccess(true)
-    setTimeout(() => router.push('/login'), 3000)
+    setSuccess(true);
+    setTimeout(() => router.push('/login'), 3000);
+  }
+
+  if (!sessionReady) {
+    return (
+      <AuthShell>
+        <p className="text-center text-sm text-[#B0B0B0]">Loading reset link…</p>
+      </AuthShell>
+    );
   }
 
   return (
@@ -82,6 +123,7 @@ export default function AuthResetPage() {
                 placeholder="••••••••"
                 autoComplete="new-password"
                 className={authInputClass}
+                disabled={Boolean(error && !password)}
               />
             </div>
             <div>
@@ -97,6 +139,7 @@ export default function AuthResetPage() {
                 placeholder="••••••••"
                 autoComplete="new-password"
                 className={authInputClass}
+                disabled={Boolean(error && !password)}
               />
             </div>
             {error && (
@@ -104,13 +147,22 @@ export default function AuthResetPage() {
                 {error}
               </p>
             )}
-            <button
-              type="submit"
-              disabled={loading}
-              className={authPrimaryBtnClass}
-            >
-              {loading ? 'Updating…' : 'Update password'}
-            </button>
+            {!error || password ? (
+              <button
+                type="submit"
+                disabled={loading}
+                className={authPrimaryBtnClass}
+              >
+                {loading ? 'Updating…' : 'Update password'}
+              </button>
+            ) : (
+              <Link
+                href="/forgot-password"
+                className={`${authPrimaryBtnClass} block text-center no-underline`}
+              >
+                Request a new reset link
+              </Link>
+            )}
           </form>
         </>
       ) : (
@@ -130,5 +182,5 @@ export default function AuthResetPage() {
         </>
       )}
     </AuthShell>
-  )
+  );
 }
