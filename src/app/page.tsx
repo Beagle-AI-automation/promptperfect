@@ -1,5 +1,3 @@
-'use client';
-
 import {
   Clipboard,
   Code2,
@@ -10,6 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { LandingHeader } from '@/components/LandingHeader';
+import { Button } from '@/components/ui/Button';
 
 const steps = [
   {
@@ -46,7 +45,7 @@ export default function Page() {
                 key={label}
                 className={`animate-fade-in flex min-w-0 flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-6 sm:px-6 sm:py-7 ${i === 0 ? 'animate-fade-in-delay-2' : i === 1 ? 'animate-fade-in-delay-3' : 'animate-fade-in-delay-4'}`}
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-text">
                   <Icon className="h-6 w-6" aria-hidden />
                 </div>
                 <span className="break-words text-center text-sm font-medium leading-snug text-[#ECECEC] sm:text-base">
@@ -64,9 +63,11 @@ export default function Page() {
 
           <Link
             href="/app"
-            className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-[#4552FF] px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:opacity-90 active:scale-[0.98] sm:mt-12"
+            className="animate-fade-in animate-fade-in-delay-5 mt-10 inline-block sm:mt-12"
           >
-            Try for Free - Get Started!
+            <Button size="lg" className="active:scale-[0.98]">
+              Try for Free - Get Started!
+            </Button>
           </Link>
         </section>
 
@@ -88,7 +89,7 @@ export default function Page() {
           <div className="mx-auto mt-10 grid w-full max-w-5xl grid-cols-1 items-stretch gap-6 sm:grid-cols-3 sm:gap-6">
             {/* Web App */}
             <article className="flex min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-left">
-              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-text">
                 <Globe className="h-5 w-5" aria-hidden />
               </div>
               <h3 className="text-base font-semibold text-[#ECECEC]">Web App</h3>
@@ -96,32 +97,28 @@ export default function Page() {
                 Full optimizer workspace: paste a prompt, pick a mode, and learn why the rewrite
                 works.
               </p>
-              <Link
-                href="/app"
-                className="mt-6 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-[#4552FF] px-4 py-2 text-sm font-medium text-[#4552FF] transition-colors hover:bg-[#4552FF]/10"
-              >
-                Open web app
+              <Link href="/app" className="mt-6 inline-block">
+                <Button size="md" variant="secondary">
+                  Open web app
+                </Button>
               </Link>
             </article>
 
             {/* Chrome Extension */}
             <article className="flex min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-left">
-              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-text">
                 <Puzzle className="h-5 w-5" aria-hidden />
               </div>
               <h3 className="text-base font-semibold text-[#ECECEC]">Chrome Extension</h3>
               <p className="mt-2 flex-1 text-sm leading-relaxed text-zinc-400">
                 Optimize prompts where you already work—ChatGPT, Gmail, and more.
               </p>
-              <Link
-                href="/docs#chrome-extension"
-                className="mt-6 inline-flex min-h-[40px] items-center justify-center rounded-xl bg-[#4552FF] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-              >
-                Add to Chrome
+              <Link href="/docs#chrome-extension" className="mt-6 inline-block">
+                <Button size="md">Add to Chrome</Button>
               </Link>
               <p className="mt-3 text-xs text-zinc-500">
                 Load unpacked or install from the Web Store—see{' '}
-                <Link href="/docs#chrome-extension" className="text-[#4552FF] hover:underline">
+                <Link href="/docs#chrome-extension" className="text-accent-text underline">
                   docs
                 </Link>
                 .
@@ -130,7 +127,7 @@ export default function Page() {
 
             {/* API */}
             <article className="flex min-w-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-left">
-              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-[#4552FF]">
+              <div className="mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-accent-text">
                 <Code2 className="h-5 w-5" aria-hidden />
               </div>
               <h3 className="text-base font-semibold text-[#ECECEC]">API</h3>
@@ -138,11 +135,10 @@ export default function Page() {
                 POST your draft prompt and stream back an optimized version from your backend or
                 scripts.
               </p>
-              <Link
-                href="/docs"
-                className="mt-6 inline-flex min-h-[40px] items-center justify-center rounded-xl border border-zinc-700 px-4 py-2 text-sm font-medium text-[#4552FF] transition-colors hover:border-[#4552FF]/50 hover:bg-[#4552FF]/5"
-              >
-                Read the Docs →
+              <Link href="/docs" className="mt-6 inline-block">
+                <Button size="md" variant="outline">
+                  Read the Docs →
+                </Button>
               </Link>
             </article>
           </div>

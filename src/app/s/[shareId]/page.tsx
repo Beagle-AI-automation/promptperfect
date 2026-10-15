@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@/lib/supabase';
+import { getServiceClient } from '@/lib/server/supabase';
 import Link from 'next/link';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
@@ -24,7 +24,7 @@ const MODE_META: Record<string, { label: string; color: string }> = {
 };
 
 function getModeMeta(mode: string) {
-  return MODE_META[mode] ?? { label: mode, color: 'bg-[#4552FF]/10 text-[#7b87ff] ring-[#4552FF]/20' };
+  return MODE_META[mode] ?? { label: mode, color: 'bg-accent/10 text-[#7b87ff] ring-accent/20' };
 }
 
 function formatDate(iso: string) {
@@ -38,13 +38,13 @@ function ErrorPage({ title, body }: { title: string; body: string }) {
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4">
       <div className="w-full max-w-sm rounded-2xl border border-[#252525] bg-gradient-to-b from-white/[0.05] to-transparent p-10 text-center shadow-2xl">
         <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[#252525] bg-[#0A0A0A]">
-          <Sparkles className="h-5 w-5 text-[#4552FF]" />
+          <Sparkles className="h-5 w-5 text-accent-text" />
         </div>
         <h1 className="font-heading text-xl font-semibold text-[#E7E6D9]">{title}</h1>
         <p className="mt-2 text-sm text-[#888]">{body}</p>
         <Link
           href="/"
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4552FF] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
         >
           Try PromptPerfect <ArrowRight className="h-4 w-4" />
         </Link>
@@ -59,7 +59,7 @@ export default async function SharedOptimizationPage({
   params: Promise<{ shareId: string }>;
 }) {
   const { shareId } = await params;
-  const client = getSupabaseClient();
+  const client = getServiceClient();
 
   if (!client) {
     return <ErrorPage title="Service Unavailable" body="Unable to connect to the database." />;
@@ -99,7 +99,7 @@ export default async function SharedOptimizationPage({
           </div>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#4552FF] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
           >
             Try it free <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -135,8 +135,8 @@ export default async function SharedOptimizationPage({
           </div>
 
           {/* Optimized */}
-          <div className="flex flex-col rounded-2xl border border-[#4552FF]/25 bg-gradient-to-b from-[#4552FF]/[0.06] to-transparent shadow-[0_0_40px_-12px_rgba(69,82,255,0.25)]">
-            <div className="flex items-center justify-between border-b border-[#4552FF]/15 px-5 py-3.5">
+          <div className="flex flex-col rounded-2xl border border-accent/25 bg-gradient-to-b from-[#4552FF]/[0.06] to-transparent shadow-[0_0_40px_-12px_rgba(69,82,255,0.25)]">
+            <div className="flex items-center justify-between border-b border-accent/15 px-5 py-3.5">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[#7b87ff]">Optimized</span>
               <CopyButton text={opt.prompt_optimized} label="Copy" />
             </div>
@@ -159,8 +159,8 @@ export default async function SharedOptimizationPage({
         )}
 
         {/* CTA */}
-        <div className="mt-10 overflow-hidden rounded-2xl border border-[#4552FF]/20 bg-gradient-to-br from-[#4552FF]/10 via-[#050505] to-[#050505] px-8 py-10 text-center">
-          <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#4552FF]/20 bg-[#4552FF]/10">
+        <div className="mt-10 overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-[#4552FF]/10 via-[#050505] to-[#050505] px-8 py-10 text-center">
+          <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-accent/20 bg-accent/10">
             <Sparkles className="h-4 w-4 text-[#7b87ff]" />
           </div>
           <h2 className="font-heading text-xl font-semibold text-[#E7E6D9]">
@@ -172,7 +172,7 @@ export default async function SharedOptimizationPage({
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#4552FF] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Create free account <ArrowRight className="h-4 w-4" />
             </Link>

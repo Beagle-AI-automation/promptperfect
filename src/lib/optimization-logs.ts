@@ -2,9 +2,9 @@
  * DB constraint `optimization_logs_mode_check` allows only better | specific | cot.
  * Map app modes (developer, research, …) to a safe value for inserts/updates.
  */
-export function normalizeModeForDb(mode: string): 'better' | 'specific' | 'cot' {
+export function normalizeModeForDb(mode: string): 'better' | 'specific' | 'cot' | 'production' {
   const m = mode.toLowerCase();
-  if (m === 'specific' || m === 'cot') return m;
+  if (m === 'specific' || m === 'cot' || m === 'production') return m;
   return 'better';
 }
 
@@ -14,7 +14,9 @@ const SCORE_REGEX = /---SCORE---(\d{1,3})(?:---)?/;
 export function parsePromptScore(text: string): number | null {
   const m = text.match(SCORE_REGEX);
   if (!m) return null;
-  const n = parseInt(m[1], 10);
+  const raw = m[1];
+  if (raw === undefined) return null;
+  const n = parseInt(raw, 10);
   if (Number.isNaN(n) || n < 1 || n > 100) return null;
   return n;
 }

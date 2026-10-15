@@ -4,6 +4,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { Bookmark, BookmarkCheck } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import { isUnlimitedMode } from '@/lib/localMode';
+import {
+  getOrCreateSessionId,
+  saveToLocalLibrary,
+} from '@/lib/client/optimizationHistory';
 
 export interface SavePromptButtonProps {
   originalPrompt: string;
@@ -38,6 +43,9 @@ export function SavePromptButton({
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
+  // Local mode (no backend): guests can save snapshots into the local library.
+  const localMode = !supabase && isUnlimitedMode();
+
   useEffect(() => {
     setJustSaved(false);
     setShowTitleInput(false);
@@ -49,12 +57,31 @@ export function SavePromptButton({
     if (alreadySaved) setJustSaved(false);
   }, [alreadySaved]);
 
-  if (!userId) return null;
+  if (!userId && !localMode) return null;
 
   const showSavedState = alreadySaved || justSaved;
 
   const handleSave = async () => {
-    if (!title.trim() || !supabase) return;
+    if (!title.trim()) return;
+    setError(null);
+    if (localMode) {
+      saveToLocalLibrary({
+        title: title.trim(),
+        prompt_original: originalPrompt,
+        prompt_optimized: optimizedPrompt,
+        explanation,
+        mode,
+        provider,
+        session_id: getOrCreateSessionId(),
+        history_id: historyId ?? null,
+      });
+      setJustSaved(true);
+      setShowTitleInput(false);
+      setTitle('');
+      onSavedToLibrary?.();
+      return;
+    }
+    if (!supabase) return;
     setError(null);
     setSaving(true);
     try {
@@ -101,14 +128,19 @@ export function SavePromptButton({
 
   if (showSavedState) {
     return (
-      <button
-        type="button"
-        disabled
-        className="flex items-center gap-2 text-sm font-medium text-[#4552FF]"
-      >
-        <BookmarkCheck size={16} strokeWidth={1} aria-hidden />
-        Saved!
-      </button>
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          disabled
+          className="flex items-center gap-2 text-sm font-medium text-accent-text"
+        >
+          <BookmarkCheck size={16} strokeWidth={1} aria-hidden />
+          Saved!
+        </button>
+        <span role="status" aria-live="polite" className="sr-only">
+          Saved to your library
+        </span>
+      </div>
     );
   }
 
@@ -120,7 +152,7 @@ export function SavePromptButton({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Name this prompt…"
-            className="w-48 rounded-lg border border-[#252525] bg-[#0A0A0A] px-3 py-1.5 text-sm text-white placeholder-[#71717A] focus:border-[#4552FF] focus:outline-none"
+            className="w-48 rounded-lg border border-[#252525] bg-[#0A0A0A] px-3 py-1.5 text-sm text-white placeholder-[#8a8a8a] focus:border-accent focus:outline-none"
             autoFocus
             disabled={saving}
             onKeyDown={(e) => {
@@ -131,7 +163,7 @@ export function SavePromptButton({
             type="button"
             onClick={() => void handleSave()}
             disabled={saving || !title.trim()}
-            className="text-sm text-[#4552FF] hover:underline disabled:opacity-50"
+            className="text-sm text-accent-text hover:underline disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -142,7 +174,7 @@ export function SavePromptButton({
               setTitle('');
               setError(null);
             }}
-            className="text-sm text-[#71717A] hover:underline"
+            className="text-sm text-[#8a8a8a] hover:underline"
           >
             Cancel
           </button>
@@ -161,7 +193,7 @@ export function SavePromptButton({
       <button
         type="button"
         onClick={() => setShowTitleInput(true)}
-        className="flex items-center gap-2 text-sm text-[#B0B0B0] transition hover:text-[#4552FF]"
+        className="flex items-center gap-2 text-sm text-[#B0B0B0] transition hover:text-accent-text"
       >
         <Bookmark size={16} strokeWidth={1} aria-hidden />
         Save to Library

@@ -3,7 +3,10 @@
 import Link from 'next/link'
 import { useEffect } from 'react'
 
-// TODO: replace console.error with a structured logger hook (e.g. useLogger)
+// NOTE: dev-only console.error is intentional here (standard Next.js error
+// pattern). Server routes use the structured logger in `lib/logger.ts`; a
+// client ingest endpoint was deliberately not added (no backend in local
+// mode, extra attack surface in prod).
 export default function Error({
   error,
   reset,
@@ -18,13 +21,13 @@ export default function Error({
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
       <h2 className="text-xl font-semibold text-[#ECECEC]">Something went wrong.</h2>
-      <p className="text-sm text-[#71717A]">
+      <p className="text-sm text-[#8a8a8a]">
         Try again, or head back to the home page. If it keeps happening, ping us in Discord.
       </p>
       <div className="flex gap-2">
         <button
           onClick={reset}
-          className="rounded-[10px] bg-[linear-gradient(135deg,#4552FF,#5c6aff)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          className="rounded-[10px] cta-gradient px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
         >
           Try again
         </button>

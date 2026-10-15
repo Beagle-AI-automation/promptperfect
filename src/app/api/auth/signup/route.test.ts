@@ -6,9 +6,14 @@ const { mockCheckRateLimit, mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
 }));
 
-vi.mock('@/lib/auth/rateLimit', () => ({
-  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
-}));
+vi.mock('@/lib/auth/rateLimit', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/auth/rateLimit')>();
+  return {
+    ...actual,
+    checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
+  };
+});
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: (...args: unknown[]) => mockCreateClient(...args),
@@ -29,14 +34,6 @@ function buildServiceClient(opts: {
   existingEmail?: boolean;
   adminCreateUser?: { data: unknown; error: unknown };
 }) {
-  const profileRow = {
-    id: 'new-user',
-    name: null,
-    email: 'new@example.com',
-    provider: 'gemini',
-    model: 'gemini-2.0-flash',
-  };
-
   const maybeSingle = vi.fn().mockResolvedValue({
     data: opts.existingEmail ? { id: 'existing-id' } : null,
     error: null,

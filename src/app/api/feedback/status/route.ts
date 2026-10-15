@@ -1,15 +1,31 @@
-import { getSupabaseClient } from '@/lib/supabase';
+import { getServiceClient } from '@/lib/server/supabase';
+import { enforceRateLimit } from '@/lib/auth/rateLimit';
 
 export const runtime = 'nodejs';
 
+/**
+ * Unauthenticated read that hits `optimization_logs` with a client-supplied
+ * `session_id`. Anyone can enumerate candidate ids and force a DB query per
+ * attempt at no cost to themselves, so the IP budget is the only brake.
+ * 60/min leaves room for the UI polling the bar on load without letting a
+ * scraper walk the table.
+ */
+const STATUS_RATE_LIMIT = 60;
+
+/** Bound untrusted query input (ids are ≤80 chars; 128 is generous). */
+const MAX_SESSION_ID = 128;
+
 /** Whether optimization_logs already has feedback for this per-run optimize session id. */
 export async function GET(request: Request) {
+  const limited = enforceRateLimit('feedback-status', request, STATUS_RATE_LIMIT);
+  if (limited) return limited;
+
   const sid = new URL(request.url).searchParams.get('session_id')?.trim();
-  if (!sid) {
+  if (!sid || sid.length > MAX_SESSION_ID) {
     return Response.json({ submitted: false, feedback: null as string | null });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getServiceClient();
   if (!supabase) {
     return Response.json({ submitted: false, feedback: null as string | null });
   }

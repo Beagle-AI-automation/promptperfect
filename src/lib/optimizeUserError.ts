@@ -8,6 +8,30 @@ export function userFacingOptimizeError(err: unknown): string {
 
   if (!raw) return 'Optimization failed. Please try again.';
 
+  if (
+    m.includes('credit_balance_exhausted') ||
+    m.includes('insufficient_quota') ||
+    m.includes('no credits remaining') ||
+    m.includes('billing')
+  ) {
+    return (
+      'This API key has no credits left. Add credits at ' +
+      'https://platform.openai.com/settings/organization/billing (OpenAI) ' +
+      'or switch provider/model and try again.'
+    );
+  }
+
+  if (
+    m.includes('no longer available') ||
+    (m.includes('not_found') && m.includes('model')) ||
+    (/\b404\b/.test(m) && m.includes('model'))
+  ) {
+    return (
+      'The configured Gemini model was retired by Google. Set GEMINI_MODEL in your environment ' +
+      'to a current model (for example gemini-3.5-flash or gemini-flash-latest) and try again.'
+    );
+  }
+
   if (m.includes('missing') && m.includes('api key')) {
     return (
       `${raw} Set GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY, or GOOGLE_API_KEY on the server.`
@@ -25,7 +49,7 @@ export function userFacingOptimizeError(err: unknown): string {
     return (
       'Google Gemini is limiting requests right now (quota or rate limit). Wait a few minutes and try again. ' +
       'Check usage and billing in Google AI Studio. If it keeps happening, set GEMINI_MODEL in your environment ' +
-      'to another model (for example gemini-2.5-flash).'
+      'to another model (for example gemini-3.5-flash).'
     );
   }
 
@@ -38,7 +62,7 @@ export function userFacingOptimizeError(err: unknown): string {
       return (
         'Google Gemini is limiting requests right now (quota or rate limit). Wait a few minutes and try again. ' +
           'Check usage and billing in Google AI Studio. If it keeps happening, set GEMINI_MODEL in your environment ' +
-          'to another model (for example gemini-2.5-flash).'
+          'to another model (for example gemini-3.5-flash).'
       );
     }
     return (

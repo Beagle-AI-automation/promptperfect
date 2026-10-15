@@ -62,4 +62,26 @@ describe('API session auth (/api/history GET)', () => {
     const body = await res.json();
     expect(body.code).toBe('BEARER_REJECTED');
   });
+
+  it('throttles an IP before spending JWT verification', async () => {
+    const spy = vi
+      .spyOn(auth, 'resolveIdentity')
+      .mockResolvedValue(undefined);
+    const req = () =>
+      new Request('http://localhost/api/history', {
+        method: 'GET',
+        headers: { 'x-forwarded-for': '198.51.100.31' },
+      });
+
+    let last: Response | undefined;
+    for (let i = 0; i < 60; i++) last = await GET(req());
+    // Still reaching the route itself, so each call did verify identity.
+    expect(last?.status).toBe(401);
+    expect(spy.mock.calls.length).toBe(60);
+
+    // The 61st is cut by the limiter, not by auth.
+    const blocked = await GET(req());
+    expect(blocked.status).toBe(429);
+    expect(spy.mock.calls.length).toBe(60);
+  });
 });

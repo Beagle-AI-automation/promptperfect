@@ -1,7 +1,10 @@
 'use client';
 
+import { useId } from 'react';
 import Link from 'next/link';
 import { Bookmark } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 interface SignInRequiredModalProps {
   isOpen: boolean;
@@ -18,25 +21,19 @@ export function SignInRequiredModal({
   feature = 'this feature',
   title,
 }: SignInRequiredModalProps) {
-  if (!isOpen) return null;
+  const titleId = useId();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="sign-in-modal-title"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-sm rounded-2xl border border-[#252525] bg-[#0A0A0A] p-7 shadow-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} titleId={titleId} maxWidthClass="max-w-sm">
+      <div className="p-0">
         {/* Icon */}
         <div className="mb-5 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#4552FF]/10 ring-1 ring-[#4552FF]/20">
-            <Bookmark className="h-5 w-5 text-[#4552FF]" strokeWidth={2} />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 ring-1 ring-accent/20">
+            <Bookmark className="h-5 w-5 text-accent-text" strokeWidth={2} />
           </div>
           <div>
             <h2
-              id="sign-in-modal-title"
+              id={titleId}
               className="font-heading text-lg font-semibold text-[#E7E6D9]"
             >
               {title ?? `Sign in to use ${feature}`}
@@ -50,19 +47,13 @@ export function SignInRequiredModal({
 
         {/* Actions */}
         <div className="flex flex-col gap-2.5">
-          <Link
-            href="/signup"
-            onClick={onClose}
-            className="flex h-10 w-full items-center justify-center rounded-xl bg-[#4552FF] text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            Create free account
+          <Link href="/signup" onClick={onClose} className="block w-full">
+            <Button className="w-full">Create free account</Button>
           </Link>
-          <Link
-            href="/login"
-            onClick={onClose}
-            className="flex h-10 w-full items-center justify-center rounded-xl border border-[#2a2a2a] bg-transparent text-sm font-medium text-[#ccc] transition hover:border-[#3a3a3a] hover:bg-[#111]"
-          >
-            Log in
+          <Link href="/login" onClick={onClose} className="block w-full">
+            <Button className="w-full" variant="outline">
+              Log in
+            </Button>
           </Link>
           <button
             type="button"
@@ -73,6 +64,6 @@ export function SignInRequiredModal({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

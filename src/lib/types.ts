@@ -6,7 +6,8 @@ export type OptimizationMode =
   | 'research' 
   | 'beginner' 
   | 'product' 
-  | 'marketing';
+  | 'marketing'
+  | 'production';
 
 export type Mode = OptimizationMode;
 
@@ -24,4 +25,16 @@ export interface OptimizeRequest {
   /** Client-generated session ID for feedback. */
   session_id?: string;
   version?: OptimizeVersion;
+}
+
+/**
+ * Signed-in workspace user (client-side view). `provider`/`model` are engine
+ * prefs; identity (`id`/`email`) comes from the Supabase session.
+ */
+export interface AppUser {
+  id: string;
+  name: string | null;
+  email: string;
+  provider: string;
+  model: string;
 }

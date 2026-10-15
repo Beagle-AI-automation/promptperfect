@@ -23,7 +23,7 @@ export class ClientErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // TODO: replace with structured logger hook when available
+    // NOTE: dev-only console.error is intentional (see note in app/error.tsx).
     if (process.env.NODE_ENV !== 'production') {
       console.error('[ClientErrorBoundary]', error, info.componentStack)
     }
@@ -36,12 +36,12 @@ export class ClientErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback
       return (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
-          <p className="text-sm text-[#71717A]">
+          <p className="text-sm text-[#8a8a8a]">
             Something went wrong in this section.
           </p>
           <button
             onClick={this.reset}
-            className="rounded-[10px] bg-[linear-gradient(135deg,#4552FF,#5c6aff)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="rounded-[10px] cta-gradient px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
           >
             Try again
           </button>

@@ -1,12 +1,13 @@
 import { validatePassword, validateEmail } from '@/lib/auth/validation'
-import { checkRateLimit } from '@/lib/auth/rateLimit'
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import {
   getSupabaseUrl,
   normalizeEnvValue,
-} from '@/lib/client/supabase'
+} from '@/lib/server/supabase'
 import { getSiteOriginForAuth } from '@/lib/auth/oauthRedirect'
+import { logWarn } from '@/lib/logger'
 
 function getServiceSupabase() {
   const url = getSupabaseUrl()
@@ -24,16 +25,21 @@ function looksLikeDuplicateAuthError(message: string): boolean {
 }
 
 export async function POST(request: Request) {
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  if (!checkRateLimit(ip)) {
+  if (!checkRateLimit(rateLimitKey('auth/signup', request))) {
     return NextResponse.json(
       { error: 'Too many attempts. Please wait a minute.' },
       { status: 429 },
     )
   }
 
-  const body = await request.json()
+  const body = (await request.json().catch(() => null)) as {
+    email?: string;
+    password?: string;
+    name?: string;
+  } | null;
+  if (!body) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
   const email =
     typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const password = typeof body.password === 'string' ? body.password : ''
@@ -48,7 +54,9 @@ export async function POST(request: Request) {
   }
 
   const supabase = getServiceSupabase()
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  // getSupabaseUrl() is null for missing *and* placeholder URLs, so local
+  // dev without a backend fails fast here instead of hanging on a dead domain.
+  const url = getSupabaseUrl()
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
 
   if (!supabase || !url || !anonKey) {
@@ -134,7 +142,7 @@ export async function POST(request: Request) {
           { status: 409 },
         )
       }
-      console.error('[signup] signUp fallback error:', adminMsg || sm)
+      logWarn('signup', `signUp fallback failed: ${adminMsg || sm}`)
       return NextResponse.json(
         { error: 'Sign up failed. Please try again.' },
         { status: 400 },
@@ -164,7 +172,7 @@ export async function POST(request: Request) {
     api_key: '',
   })
   if (insertErr && insertErr.code !== '23505') {
-    console.error('[signup insert pp_users]', insertErr.message)
+    logWarn('signup', `insert pp_users failed: ${insertErr.message}`)
     return NextResponse.json(
       { error: 'Could not create profile' },
       { status: 500 },
@@ -181,7 +189,7 @@ export async function POST(request: Request) {
     })
     if (resendErr) {
       // Non-fatal: account exists, verification email just couldn't be sent.
-      console.error('[signup] resend verification email:', resendErr.message)
+      logWarn('signup', `resend verification email failed: ${resendErr.message}`)
     }
   }
 

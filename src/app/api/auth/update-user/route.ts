@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { getSupabaseAdminClient } from '@/lib/server/supabase';
 import { createRouteHandlerClient } from '@/lib/server/supabase';
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit';
+import { logWarn } from '@/lib/logger';
+import { parseUpdateUserBody } from '@/lib/apiSchemas';
 
 export async function POST(request: Request) {
   try {
+    if (!checkRateLimit(rateLimitKey('auth/update-user', request), 20)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down.' },
+        { status: 429 },
+      );
+    }
+
     const authClient = await createRouteHandlerClient();
     const {
       data: { user },
@@ -15,9 +25,15 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const userId = user.id;
-    const provider = typeof body.provider === 'string' ? body.provider : undefined;
-    const model = typeof body.model === 'string' ? body.model : undefined;
-    const api_key = typeof body.api_key === 'string' ? body.api_key : undefined;
+    const parsed = parseUpdateUserBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    const { provider, model, apiKey } = parsed.value;
+    // NOTE (secret boundary): the BYOK key is stored as-sent in pp_users so
+    // the server can call providers on the user's behalf. It is scoped to
+    // the authenticated user (service-role write + RLS), never logged, and
+    // never echoed back in any response. See SECURITY_AUDIT.md.
 
     const admin = getSupabaseAdminClient();
     if (!admin) {
@@ -30,7 +46,7 @@ export async function POST(request: Request) {
     const updates: Record<string, unknown> = {};
     if (provider !== undefined) updates.provider = provider;
     if (model !== undefined) updates.model = model;
-    if (api_key !== undefined) updates.api_key = api_key;
+    if (apiKey !== undefined) updates.api_key = apiKey;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ ok: true });
@@ -44,8 +60,9 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (error) {
+      logWarn('update-user', `pp_users update failed: ${error.message}`);
       return NextResponse.json(
-        { error: error.message || 'Update failed' },
+        { error: 'Update failed' },
         { status: 500 }
       );
     }

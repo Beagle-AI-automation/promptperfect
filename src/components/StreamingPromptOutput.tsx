@@ -1,17 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Check, Copy } from "lucide-react";
+import { useCopy } from "@/lib/clipboard";
 
 import {
   CHANGES_DELIMITER,
   EXPLANATION_DELIMITER,
   stripPromptScoreMarkers,
 } from "@/lib/delimiter";
-
-const optimizerTextarea =
-  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif] whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere";
+import { optimizerTextarea } from "@/components/ui/optimizerTextarea";
 
 export interface StreamingPromptOutputProps {
   text: string;
@@ -45,7 +44,7 @@ export function StreamingPromptOutput({
   afterTextarea,
 }: StreamingPromptOutputProps) {
   const lastExplRef = useRef("");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
 
   const optimized = useMemo(() => optimizedFromFullText(text), [text]);
   const explanation = useMemo(() => explanationFromFullText(text), [text]);
@@ -59,13 +58,7 @@ export function StreamingPromptOutput({
 
   const handleCopy = async () => {
     if (!optimized.trim()) return;
-    try {
-      await navigator.clipboard.writeText(optimized);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // swallow: streaming parse edge case
-    }
+    await copy(optimized);
   };
 
   const outLen = optimized.length;
@@ -102,6 +95,7 @@ export function StreamingPromptOutput({
           <textarea
             readOnly
             value={optimized}
+            placeholder="Your optimized prompt will stream here…"
             aria-label="Optimized prompt output"
             className={optimizerTextarea}
             rows={1}
@@ -114,7 +108,17 @@ export function StreamingPromptOutput({
           {outLen} characters -- {tokEst} tokens
         </p>
         {isStreaming && (
-          <p className="mt-1 shrink-0 text-[13px] text-[#666]">Streaming…</p>
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-1 flex shrink-0 items-center gap-1.5 text-[13px] text-[#808088]"
+          >
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
+            />
+            Streaming…
+          </p>
         )}
       </div>
     );
@@ -149,6 +153,7 @@ export function StreamingPromptOutput({
       <textarea
         readOnly
         value={optimized}
+        placeholder="Your optimized prompt will stream here…"
         rows={12}
         aria-label="Optimized prompt output"
         className="min-h-[200px] w-full resize-y rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3.5 font-mono text-sm text-zinc-900 whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
@@ -157,7 +162,17 @@ export function StreamingPromptOutput({
         {outLen} characters · est. {tokEst} tokens
       </p>
       {isStreaming && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Streaming…</p>
+        <p
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400"
+        >
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
+          />
+          Streaming…
+        </p>
       )}
     </div>
   );

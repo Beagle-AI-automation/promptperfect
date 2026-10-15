@@ -1,15 +1,21 @@
 import { generateText } from 'ai';
 import type { NextRequest } from 'next/server';
 
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
-import { checkRateLimit } from '@/lib/auth/rateLimit';
+import { getSupabaseAdminClient } from '@/lib/server/supabase';
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit';
 import { createRouteHandlerClient } from '@/lib/server/supabase';
 import { splitOptimizedOutput } from '@/lib/delimiter';
 import { normalizeModeForDb, parsePromptScore } from '@/lib/optimization-logs';
 import { userFacingOptimizeError } from '@/lib/optimizeUserError';
-import { createProvider } from '@/lib/providers';
+import { createProvider, getProviderCallOptions, hasServerKey } from '@/lib/providers';
+import { isUnlimitedMode } from '@/lib/localMode';
 import { getSystemPrompt } from '@/lib/prompts';
-import type { OptimizationMode, OptimizeRequest, Provider } from '@/lib/types';
+import { parseOptimizeBody } from '@/lib/apiSchemas';
+import { getRequestId, logApi, logWarn } from '@/lib/logger';
+import type { OptimizationLogInsert } from '@/types/database';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 function parseAllowedOrigins(): string[] {
   const raw = process.env.ALLOWED_ORIGINS?.trim();
@@ -49,26 +55,6 @@ function corsHeadersForRequest(req: NextRequest): Record<string, string> {
   return {};
 }
 
-const MODES: OptimizationMode[] = [
-  'better',
-  'specific',
-  'cot',
-  'developer',
-  'research',
-  'beginner',
-  'product',
-  'marketing',
-];
-const PROVIDERS: Provider[] = ['gemini', 'openai', 'anthropic'];
-
-function isMode(v: unknown): v is OptimizationMode {
-  return typeof v === 'string' && MODES.includes(v as OptimizationMode);
-}
-
-function isProvider(v: unknown): v is Provider {
-  return typeof v === 'string' && PROVIDERS.includes(v as Provider);
-}
-
 export async function OPTIONS(req: NextRequest) {
   return new Response(null, {
     status: 204,
@@ -77,11 +63,21 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const started = Date.now();
+  const requestId = getRequestId(req);
+  const res = await handlePost(req);
+  logApi('optimize-sync', {
+    status: res.status,
+    ms: Date.now() - started,
+    requestId,
+  });
+  return res;
+}
+
+async function handlePost(req: NextRequest) {
   const corsHeaders = corsHeadersForRequest(req);
 
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!checkRateLimit(ip, 30)) {
+  if (!checkRateLimit(rateLimitKey('optimize-sync', req), 30)) {
     return Response.json(
       { error: 'Too many requests. Please slow down.' },
       { status: 429, headers: corsHeaders },
@@ -89,37 +85,41 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = (await req.json()) as Partial<OptimizeRequest> & {
-      version?: string;
-      text?: string;
-    };
-
-    const promptRaw =
-      typeof body.text === 'string' && body.text.trim()
-        ? body.text.trim()
-        : typeof body.prompt === 'string'
-          ? body.prompt.trim()
-          : '';
-    if (!promptRaw) {
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
       return Response.json(
-        { error: 'prompt or text is required' },
+        { error: 'Invalid request body' },
         { status: 400, headers: corsHeaders },
       );
     }
-
-    const mode = isMode(body.mode) ? body.mode : 'better';
-    const provider = isProvider(body.provider) ? body.provider : 'gemini';
+    const parsed = parseOptimizeBody(rawBody);
+    if (!parsed.ok) {
+      return Response.json(
+        { error: parsed.error },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+    const {
+      prompt: promptRaw,
+      mode,
+      provider,
+      apiKey: apiKeyFromBody,
+      sessionId,
+      version,
+    } = parsed.value;
 
     const authHeader = req.headers.get('Authorization') || '';
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    const apiKeyFromBody =
-      typeof body.apiKey === 'string' ? body.apiKey.trim() : undefined;
     const apiKey = bearer || apiKeyFromBody;
 
     // When no BYOK key is supplied the request would use the server's default
     // API key. Require an authenticated Supabase session in that case to
-    // prevent unauthenticated consumption of server-side quota.
-    if (!apiKey) {
+    // prevent unauthenticated consumption of server-side quota — except in
+    // unlimited local-dev mode, where sign-in is unavailable and the server
+    // key belongs to the local developer.
+    if (!apiKey && !(isUnlimitedMode() && hasServerKey(provider))) {
       const authClient = await createRouteHandlerClient();
       const { data: { user } } = await authClient.auth.getUser();
       if (!user) {
@@ -144,11 +144,13 @@ export async function POST(req: NextRequest) {
     const system = getSystemPrompt(mode);
 
     try {
+      const llmStart = Date.now();
       const result = await generateText({
         model,
         system,
         prompt: promptRaw,
         maxRetries: 1,
+        ...getProviderCallOptions(provider),
       });
 
       const rawText = result.text ?? '';
@@ -157,16 +159,11 @@ export async function POST(req: NextRequest) {
       const optimizedText = rawOptimized.trim();
       const promptScore = parsePromptScore(rawText);
 
-      const sessionId =
-        typeof body.session_id === 'string' ? body.session_id.trim() : '';
-      const version =
-        body.version === 'v1' || body.version === 'v2' ? body.version : 'v1';
-
       if (sessionId) {
         const admin = getSupabaseAdminClient();
         const db = admin;
         if (db) {
-          void db.from('optimization_logs').insert({
+          const logRow: OptimizationLogInsert = {
             session_id: sessionId,
             mode: normalizeModeForDb(mode),
             version,
@@ -176,9 +173,43 @@ export async function POST(req: NextRequest) {
             optimized_length: optimizedText.length,
             explanation_length: explanation.length + changes.length,
             ...(promptScore != null ? { prompt_score: promptScore } : {}),
-          });
+          };
+          void db.from('optimization_logs').insert(logRow);
         }
       }
+
+      // Observability: LLM metrics (additive log line, correlated by requestId).
+      // `usage` shape varies by provider, so read it defensively (log-only).
+      const usage = (
+        result as unknown as {
+          usage?: {
+            promptTokens?: number;
+            completionTokens?: number;
+            totalTokens?: number;
+          };
+        }
+      ).usage;
+      logApi('optimize-sync', {
+        status: 200,
+        ms: Date.now() - llmStart,
+        requestId: getRequestId(req),
+        extra: {
+          llm: true,
+          provider,
+          model: modelId,
+          promptLength: promptRaw.length,
+          optimizedLength: optimizedText.length,
+          ...(typeof usage?.promptTokens === 'number'
+            ? { promptTokens: usage.promptTokens }
+            : {}),
+          ...(typeof usage?.completionTokens === 'number'
+            ? { completionTokens: usage.completionTokens }
+            : {}),
+          ...(typeof usage?.totalTokens === 'number'
+            ? { totalTokens: usage.totalTokens }
+            : {}),
+        },
+      });
 
       return Response.json(
         {
@@ -198,7 +229,7 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Invalid request';
-    return Response.json({ error: message }, { status: 400, headers: corsHeaders });
+    logWarn('optimize-sync', `request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    return Response.json({ error: 'Invalid request' }, { status: 400, headers: corsHeaders });
   }
 }

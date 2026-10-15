@@ -91,7 +91,9 @@ describe("SavePromptButton", () => {
       }),
     );
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const firstFetch = fetchMock.mock.calls[0];
+    expect(firstFetch).toBeDefined();
+    const init = (firstFetch?.[1] ?? {}) as RequestInit;
     const body = JSON.parse(init.body as string);
     expect(body).toMatchObject({
       title: "My title",
@@ -101,5 +103,21 @@ describe("SavePromptButton", () => {
       mode: "better",
       provider: "gemini",
     });
+  });
+
+  it("announces the saved state to screen readers via a status region", async () => {
+    render(
+      <SavePromptButton
+        originalPrompt="a"
+        optimizedPrompt="b"
+        explanation=""
+        mode="better"
+        provider="gemini"
+        userId="user-1"
+        alreadySaved
+      />,
+    );
+    expect(await screen.findByRole("button", { name: /saved!/i })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/saved to your library/i);
   });
 });

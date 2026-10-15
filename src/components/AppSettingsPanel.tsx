@@ -47,20 +47,39 @@ export function AppSettingsPanel({
   const [localProvider, setLocalProvider] = useState<Provider>(provider);
   const [localKey, setLocalKey] = useState(() => apiKey || loadStoredKey(provider));
   const [saving, setSaving] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyState, setVerifyState] = useState<'idle' | 'valid' | 'invalid'>('idle');
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     setLocalProvider(provider);
     setLocalKey(apiKey || loadStoredKey(provider));
-    setVerified(false);
+    setVerifyState('idle');
     setSaveError('');
   }, [open, provider, apiKey]);
 
-  const handleVerifyKey = () => {
-    if (localProvider === 'gemini') return;
-    setVerified(true);
-    setTimeout(() => setVerified(false), 3000);
+  const handleVerifyKey = async () => {
+    if (localProvider === 'gemini' || !localKey.trim()) return;
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/verify-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          provider: localProvider,
+          apiKey: localKey.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok?: boolean }
+        | null;
+      setVerifyState(res.ok && data?.ok ? 'valid' : 'invalid');
+    } catch {
+      setVerifyState('invalid');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleSave = async () => {
@@ -77,7 +96,7 @@ export function AppSettingsPanel({
             localProvider === 'gemini'
               ? 'gemini-2.0-flash'
               : localProvider === 'openai'
-                ? 'gpt-4o-mini'
+                ? 'gpt-6-astra'
                 : 'claude-3-5-haiku-20241022',
           api_key: localProvider !== 'gemini' ? localKey : '',
         }),
@@ -102,10 +121,14 @@ export function AppSettingsPanel({
           localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
         } catch {
           // swallow: JSON.parse failed on existing key blob — overwrite with single-provider object
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({ [localProvider]: localKey.trim() }),
-          );
+          try {
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({ [localProvider]: localKey.trim() }),
+            );
+          } catch {
+            // swallow: quota / private mode — key stays in memory for the session
+          }
         }
       }
       writeEnginePrefs({
@@ -114,7 +137,7 @@ export function AppSettingsPanel({
           localProvider === 'gemini'
             ? 'gemini-2.0-flash'
             : localProvider === 'openai'
-              ? 'gpt-4o-mini'
+              ? 'gpt-6-astra'
               : 'claude-3-5-haiku-20241022',
       });
       onSaveSuccess();
@@ -165,7 +188,7 @@ export function AppSettingsPanel({
                   }}
                   className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
                     localProvider === p
-                      ? 'border-[#4552FF] bg-[#4552FF]/10 text-[#ECECEC]'
+                      ? 'border-accent bg-accent/10 text-[#ECECEC]'
                       : 'border-zinc-600 text-zinc-400 hover:border-zinc-500'
                   }`}
                 >
@@ -184,20 +207,26 @@ export function AppSettingsPanel({
               <input
                 type="password"
                 value={localKey}
-                onChange={(e) => setLocalKey(e.target.value)}
+                onChange={(e) => {
+                  setLocalKey(e.target.value);
+                  setVerifyState('idle');
+                }}
                 placeholder="Paste your API key"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-[#ECECEC] placeholder-zinc-500 focus:border-[#4552FF] focus:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-[#ECECEC] placeholder-zinc-500 focus:border-accent focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleVerifyKey}
-                disabled={!localKey.trim()}
+                disabled={!localKey.trim() || verifying}
                 className="mt-2 rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
               >
-                Verify
+                {verifying ? 'Verifying…' : 'Verify'}
               </button>
-              {verified && (
-                <p className="mt-1 text-xs text-green-500">Key format looks valid.</p>
+              {verifyState === 'valid' && (
+                <p className="mt-1 text-xs text-green-500">Key verified successfully.</p>
+              )}
+              {verifyState === 'invalid' && !verifying && (
+                <p className="mt-1 text-xs text-red-400">Could not verify this key. Check it and try again.</p>
               )}
             </div>
           )}
@@ -210,7 +239,7 @@ export function AppSettingsPanel({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="w-full rounded-lg bg-[#4552FF] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>

@@ -1,6 +1,6 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import type { getSupabaseAdminClient } from '@/lib/client/supabase'
+import type { getSupabaseAdminClient } from '@/lib/server/supabase'
 
 type AdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>
 

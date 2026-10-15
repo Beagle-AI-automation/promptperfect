@@ -1,9 +1,13 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
+import type { Provider } from '@/lib/types';
 
 /** Persisted AI engine defaults only — never identity (id/email come from the Supabase session). */
 export const ENGINE_PREFS_STORAGE_KEY = 'promptperfect:engine_prefs';
+
+/** BYOK keys per non-default provider. Gemini uses the server key. */
+export const API_KEY_STORAGE_KEY = 'promptperfect:apikey';
 
 export type EnginePrefs = {
   provider?: string;
@@ -41,6 +45,26 @@ export function clearEnginePrefs(): void {
     localStorage.removeItem(ENGINE_PREFS_STORAGE_KEY);
   } catch {
     // swallow: prefs clear skipped
+  }
+}
+
+/**
+ * BYOK key stored by `AppSettingsPanel` for the given provider.
+ * Gemini always uses the server key, so it resolves to `''`.
+ */
+export function loadApiKey(provider: Provider): string {
+  if (provider === 'gemini') return '';
+  if (typeof window === 'undefined') return '';
+  try {
+    const stored = JSON.parse(localStorage.getItem(API_KEY_STORAGE_KEY) || '{}') as Record<
+      string,
+      unknown
+    >;
+    const key = stored[provider];
+    return typeof key === 'string' ? key : '';
+  } catch {
+    // swallow: could not read stored key
+    return '';
   }
 }
 

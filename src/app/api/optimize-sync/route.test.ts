@@ -4,7 +4,7 @@ import { POST, OPTIONS } from "./route";
 
 const generateText = vi.fn();
 
-vi.mock("@/lib/client/supabase", () => ({
+vi.mock("@/lib/server/supabase", () => ({
   getSupabaseAdminClient: () => null,
 }));
 
@@ -26,6 +26,8 @@ vi.mock("@/lib/providers", () => ({
     model: {},
     modelId: "test-model",
   }),
+  getProviderCallOptions: () => ({}),
+  hasServerKey: () => true,
 }));
 
 vi.mock("ai", () => ({
@@ -90,7 +92,7 @@ describe("/api/optimize-sync", () => {
     const res = await POST(req);
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: string };
-    expect(json.error).toMatch(/prompt or text is required/i);
+    expect(json.error).toMatch(/missing or empty prompt/i);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
       "http://localhost:3000",
     );

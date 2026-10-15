@@ -4,6 +4,7 @@ import {
   jsonUnauthorizedDetails,
   resolveIdentity,
 } from '@/lib/server/supabaseRequestIdentity';
+import { logWarn } from '@/lib/logger';
 
 /** PostgREST rejects filters on unknown columns until migration adds them. */
 function isSourceHistoryColumnUnavailable(message: string): boolean {
@@ -42,9 +43,7 @@ export async function GET(request: Request) {
   }
 
   if (!isSourceHistoryColumnUnavailable(primary.error.message)) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[saved-prompts/status]', primary.error.message);
-    }
+    logWarn('saved-prompts/status', `lookup failed: ${primary.error.message}`);
     return NextResponse.json({ saved: false });
   }
 
@@ -68,9 +67,7 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (matchErr) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('[saved-prompts/status] fallback', matchErr.message);
-    }
+    logWarn('saved-prompts/status', `fallback failed: ${matchErr.message}`);
     return NextResponse.json({ saved: false });
   }
 

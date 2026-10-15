@@ -1,6 +1,9 @@
 import { normalizeModeForDb } from '@/lib/optimization-logs';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getServiceClient } from '@/lib/server/supabase';
 import { resolveIdentity } from '@/lib/server/supabaseRequestIdentity';
+import { parseFeedbackBody } from '@/lib/apiSchemas';
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit';
+import { logWarn } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +14,14 @@ function isMissingColumnError(message: string): boolean {
 }
 
 export async function POST(req: Request) {
-  const supabase = getSupabaseClient();
+  if (!checkRateLimit(rateLimitKey('feedback', req), 30)) {
+    return Response.json(
+      { error: 'Too many requests. Please slow down.' },
+      { status: 429 },
+    );
+  }
+
+  const supabase = getServiceClient();
   if (!supabase) {
     return Response.json({ error: 'Supabase not configured' }, { status: 500 });
   }
@@ -19,18 +29,15 @@ export async function POST(req: Request) {
   const identity = await resolveIdentity(req);
   const authUserId = identity?.userId ?? null;
 
-  let body: {
-    mode?: string;
-    provider?: string;
-    inputLength?: number;
-    outputLength?: number;
-    feedback?: string;
-    sessionId?: string;
-  };
+  let rawBody: unknown;
   try {
-    body = (await req.json()) as typeof body;
+    rawBody = await req.json();
   } catch {
     return Response.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+  const parsed = parseFeedbackBody(rawBody);
+  if (!parsed.ok) {
+    return Response.json({ error: parsed.error }, { status: 400 });
   }
   const {
     mode,
@@ -39,23 +46,13 @@ export async function POST(req: Request) {
     outputLength,
     feedback,
     sessionId,
-  } = body;
+  } = parsed.value;
 
-  if (!mode || typeof mode !== 'string') {
-    return Response.json({ error: 'mode is required' }, { status: 400 });
-  }
-  if (!feedback || typeof feedback !== 'string') {
-    return Response.json({ error: 'feedback is required' }, { status: 400 });
-  }
-  if (!sessionId || typeof sessionId !== 'string' || !sessionId.trim()) {
-    return Response.json({ error: 'sessionId is required' }, { status: 400 });
-  }
-
-  const sid = sessionId.trim();
+  const sid = sessionId;
   const normalizedMode = normalizeModeForDb(mode);
-  const prov = typeof provider === 'string' && provider.trim() ? provider.trim() : 'gemini';
-  const pl = typeof inputLength === 'number' && !Number.isNaN(inputLength) ? inputLength : 0;
-  const ol = typeof outputLength === 'number' && !Number.isNaN(outputLength) ? outputLength : 0;
+  const prov = provider || 'gemini';
+  const pl = inputLength;
+  const ol = outputLength;
 
   const baseUpdate = {
     feedback,
@@ -137,10 +134,14 @@ export async function POST(req: Request) {
           feedback: fb,
         });
       }
-      if (legacy.error) return Response.json({ error: legacy.error.message }, { status: 500 });
+      if (legacy.error) {
+        logWarn('feedback', `legacy insert failed: ${legacy.error.message}`);
+        return Response.json({ error: 'Could not save feedback' }, { status: 500 });
+      }
       return Response.json({ success: true, legacy: true });
     }
-    return Response.json({ error: updated.error.message }, { status: 500 });
+    logWarn('feedback', `update failed: ${updated.error.message}`);
+    return Response.json({ error: 'Could not save feedback' }, { status: 500 });
   }
 
   if (updated.data && updated.data.length > 0) {
@@ -204,10 +205,14 @@ export async function POST(req: Request) {
           feedback: fb,
         });
       }
-      if (legacy.error) return Response.json({ error: legacy.error.message }, { status: 500 });
+      if (legacy.error) {
+        logWarn('feedback', `legacy insert(2) failed: ${legacy.error.message}`);
+        return Response.json({ error: 'Could not save feedback' }, { status: 500 });
+      }
       return Response.json({ success: true, legacy: true });
     }
-    return Response.json({ error: inserted.error.message }, { status: 500 });
+    logWarn('feedback', `insert failed: ${inserted.error.message}`);
+    return Response.json({ error: 'Could not save feedback' }, { status: 500 });
   }
 
   return Response.json({ success: true, inserted: true });

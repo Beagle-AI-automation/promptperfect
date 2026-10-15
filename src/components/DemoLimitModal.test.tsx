@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DemoLimitModal } from "./DemoLimitModal";
+import { getGuestLimit } from "@/lib/guest";
 
 const push = vi.fn();
 
@@ -24,7 +25,7 @@ describe("DemoLimitModal", () => {
     render(<DemoLimitModal isOpen onClose={() => {}} />);
     expect(
       screen.getByRole("heading", {
-        name: /you've used all 5 free optimizations/i,
+        name: new RegExp(`you've used all ${getGuestLimit()} free optimizations`, "i"),
       })
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /sign up free/i }));

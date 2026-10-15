@@ -151,18 +151,24 @@ export function FeedbackButtons({
           <ThumbsDown className="h-[18px] w-[18px]" strokeWidth={2} />
         </button>
         {loading && (
-          <span className="text-sm text-[#71717A]">…</span>
+          <span className="text-sm text-[#8a8a8a]">…</span>
         )}
         {submitted && !loading && (
-          <span className="text-sm text-green-500/90">Feedback saved</span>
+          <span role="status" className="text-sm text-green-500/90">
+            Feedback saved
+          </span>
         )}
       </div>
       {!sessionId?.trim() && !loading && (
-        <p className="text-xs text-[#71717A]">
+        <p className="text-xs text-[#8a8a8a]">
           Run Optimize or choose an item from history to attach feedback.
         </p>
       )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useCopy } from "@/lib/clipboard";
+import { optimizerTextarea } from "@/components/ui/optimizerTextarea";
 
 export interface PromptInputProps {
   value: string;
@@ -14,9 +15,6 @@ export interface PromptInputProps {
   variant?: "default" | "optimizer";
 }
 
-const optimizerTextarea =
-  "pp-workspace-scroll box-border h-[380px] w-full shrink-0 resize-none overflow-y-auto rounded-[12px] border border-solid border-[#222] bg-[#0f0f0f] p-4 text-[14px] leading-relaxed text-[#ECECEC] placeholder-[#3a3a3a] outline-none transition-[border-color,box-shadow] duration-150 ease-out focus:border-[#4552FF] focus:shadow-[0_0_0_2px_#4552FF18] focus:outline-none disabled:opacity-50 font-[family-name:var(--font-space-grotesk),sans-serif] whitespace-pre-wrap break-words [word-break:break-word] overflow-wrap-anywhere";
-
 export function PromptInput({
   value,
   onChange,
@@ -26,21 +24,14 @@ export function PromptInput({
   showLabel = true,
   variant = "default",
 }: PromptInputProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
 
   const len = value.length;
   const tokEst = len === 0 ? 0 : Math.max(1, Math.ceil(len / 4));
 
   const handleCopy = async () => {
     if (!value.trim()) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      onCopy?.();
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // swallow: clipboard or input helper failure
-    }
+    if (await copy(value)) onCopy?.();
   };
 
   if (variant === "optimizer") {

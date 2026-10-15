@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Minus, Plus } from "lucide-react";
 
 export interface DiffViewProps {
   original: string;
@@ -29,13 +30,21 @@ function computeDiff(a: string[], b: string[]): Op[] {
     ];
   }
 
-  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    new Array<number>(n + 1).fill(0),
+  );
   for (let i = 1; i <= m; i++) {
+    const row = dp[i];
+    const rowPrev = dp[i - 1];
+    const av = a[i - 1];
+    if (!row || !rowPrev || av === undefined) continue;
     for (let j = 1; j <= n; j++) {
-      dp[i][j] =
-        a[i - 1] === b[j - 1]
-          ? dp[i - 1][j - 1] + 1
-          : Math.max(dp[i - 1][j], dp[i][j - 1]);
+      const bv = b[j - 1];
+      if (bv === undefined) continue;
+      row[j] =
+        av === bv
+          ? (rowPrev[j - 1] ?? 0) + 1
+          : Math.max(rowPrev[j] ?? 0, row[j - 1] ?? 0);
     }
   }
 
@@ -43,15 +52,31 @@ function computeDiff(a: string[], b: string[]): Op[] {
   let i = m;
   let j = n;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      ops.unshift({ type: "equal", value: a[i - 1] });
+    const av = a[i - 1];
+    const bv = b[j - 1];
+    if (i > 0 && j > 0 && av !== undefined && av === bv) {
+      ops.unshift({ type: "equal", value: av });
       i--;
       j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      ops.unshift({ type: "insert", value: b[j - 1] });
+      continue;
+    }
+    const row = i >= 0 ? dp[i] : undefined;
+    const rowPrev = i > 0 ? dp[i - 1] : undefined;
+    const goInsert =
+      j > 0 &&
+      (i === 0 ||
+        (row !== undefined &&
+          rowPrev !== undefined &&
+          (row[j - 1] ?? 0) >= (rowPrev[j] ?? 0)));
+    if (goInsert) {
+      // Unreachable when j === 0 (loop guard); break defensively instead of crashing.
+      if (bv === undefined) break;
+      ops.unshift({ type: "insert", value: bv });
       j--;
     } else {
-      ops.unshift({ type: "delete", value: a[i - 1] });
+      // Unreachable when i === 0 (insert branch takes it); same defensive break.
+      if (av === undefined) break;
+      ops.unshift({ type: "delete", value: av });
       i--;
     }
   }
@@ -87,15 +112,11 @@ export function DiffView({ original, optimized }: DiffViewProps) {
         </span>
         <div className="mx-1 h-3 w-px bg-[#222]" />
         <span className="flex items-center gap-1 rounded-md bg-rose-950/50 px-2 py-0.5 text-[11.5px] font-medium text-rose-400 ring-1 ring-inset ring-rose-900/40">
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="shrink-0">
-            <path d="M1.5 4.5h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
+          <Minus className="h-[9px] w-[9px] shrink-0" strokeWidth={1.6} aria-hidden />
           {removedCount} removed
         </span>
-        <span className="flex items-center gap-1 rounded-md bg-[#4552FF]/10 px-2 py-0.5 text-[11.5px] font-medium text-[#7C86FF] ring-1 ring-inset ring-[#4552FF]/20">
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="shrink-0">
-            <path d="M4.5 1.5v6M1.5 4.5h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
+        <span className="flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-[11.5px] font-medium text-[#7C86FF] ring-1 ring-inset ring-accent/20">
+          <Plus className="h-[9px] w-[9px] shrink-0" strokeWidth={1.6} aria-hidden />
           {addedCount} added
         </span>
       </div>
@@ -129,8 +150,8 @@ export function DiffView({ original, optimized }: DiffViewProps) {
         {/* After */}
         <div className="flex flex-col">
           <div className="flex items-center gap-2 border-b border-[#161616] bg-[#0c0c0c] px-4 py-2.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#4552FF]/80" />
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[#4552FF]/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent/80" />
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-text/80">
               Optimized
             </span>
           </div>
@@ -139,7 +160,7 @@ export function DiffView({ original, optimized }: DiffViewProps) {
             tok.type === "insert" ? (
               <mark
                 key={`i-${i}`}
-                className="rounded-[3px] bg-[#4552FF]/[0.12] px-[1px] text-[#818cf8]"
+                className="rounded-[3px] bg-accent/[0.12] px-[1px] text-[#818cf8]"
               >
                 {tok.value}
               </mark>
@@ -160,7 +181,7 @@ export function DiffView({ original, optimized }: DiffViewProps) {
           removed
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-[#444]">
-          <mark className="rounded-[3px] bg-[#4552FF]/[0.12] px-1 text-[#818cf8]">
+          <mark className="rounded-[3px] bg-accent/[0.12] px-1 text-[#818cf8]">
             word
           </mark>
           added

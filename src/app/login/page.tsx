@@ -238,7 +238,7 @@ export default function LoginPage() {
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signin'
-              ? 'bg-[#4552FF] text-white shadow-md shadow-[#4552FF]/25'
+              ? 'bg-accent text-white shadow-md shadow-[#4552FF]/25'
               : 'text-[#B0B0B0] hover:text-[#E7E6D9]'
           }`}
         >
@@ -256,7 +256,7 @@ export default function LoginPage() {
           }}
           className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
             mode === 'signup'
-              ? 'bg-[#4552FF] text-white shadow-md shadow-[#4552FF]/25'
+              ? 'bg-accent text-white shadow-md shadow-[#4552FF]/25'
               : 'text-[#B0B0B0] hover:text-[#E7E6D9]'
           }`}
         >
@@ -419,7 +419,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => void handleResendConfirmation()}
-              className="text-sm font-medium text-[#4552FF] underline-offset-2 hover:underline"
+              className="text-sm font-medium text-accent-text underline-offset-2 hover:underline"
             >
               Resend confirmation email
             </button>
@@ -454,7 +454,7 @@ export default function LoginPage() {
                 setMode('signup');
                 setVerificationSent(false);
               }}
-              className="font-medium text-[#4552FF] transition hover:text-[#6b75ff]"
+              className="font-medium text-accent-text transition hover:text-[#6b75ff]"
             >
               Sign up
             </button>
@@ -468,7 +468,7 @@ export default function LoginPage() {
                 setMode('signin');
                 setVerificationSent(false);
               }}
-              className="font-medium text-[#4552FF] transition hover:text-[#6b75ff]"
+              className="font-medium text-accent-text transition hover:text-[#6b75ff]"
             >
               Log in
             </button>

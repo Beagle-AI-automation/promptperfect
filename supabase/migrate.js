@@ -1,121 +1,149 @@
 /**
- * Database Migration Script
- * Run this to create the pp_optimization_history table for the share feature
+ * PromptPerfect database migration runner.
  *
- * Usage: node supabase/migrate.js
+ * Single source of truth: `supabase/migrations/*.sql` applied in lexical
+ * (timestamp) order. Each file runs once, inside its own transaction, and is
+ * recorded in `supabase_migrations.schema_migrations` so re-runs are safe
+ * no-ops (idempotent).
+ *
+ * Tooling constraint: plain SQL + Node.js only (`pg` driver). No ORM.
+ *
+ * Usage:
+ *   DATABASE_URL=postgresql://... node supabase/migrate.js
+ *   npm run db:migrate
+ *   node supabase/migrate.js --dry-run   # list pending, apply nothing
+ *   node supabase/migrate.js --check      # exit 1 if any migration pending
+ *
+ * Env resolution (first set wins):
+ *   DATABASE_URL (preferred — direct Postgres connection)
+ * Otherwise the Supabase project URL + service-role key are accepted for
+ * `verify`-style flows, but DDL still requires DATABASE_URL; the runner
+ * exits with instructions instead of half-applying.
+ *
+ * .env.local is loaded first, then .env (local dev convenience).
  */
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const { createClient } = require('@supabase/supabase-js');
+/* eslint-disable @typescript-eslint/no-require-imports -- plain-Node runner, no bundler/TS imports */
+const fs = require('fs');
+const path = require('path');
 
-// Load environment variables
-require('dotenv').config({ path: '.env' });
+function loadEnvFiles() {
+  try {
+    const dotenv = require('dotenv');
+    for (const file of ['.env.local', '.env']) {
+      const full = path.join(process.cwd(), file);
+      if (fs.existsSync(full)) dotenv.config({ path: full });
+    }
+  } catch {
+    // dotenv is optional; env may already be exported.
+  }
+}
+loadEnvFiles();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+const TRACKING_SCHEMA = 'supabase_migrations';
+const TRACKING_TABLE = `${TRACKING_SCHEMA}.schema_migrations`;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('❌ Error: Missing Supabase credentials in .env file');
-  console.error('   Required: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY)');
-  process.exit(1);
+function usage(exitCode = 0) {
+  console.log(`Usage: node supabase/migrate.js [--dry-run] [--check] [--help]
+
+  Applies pending files in supabase/migrations/ in lexical order.
+  Requires DATABASE_URL (direct Postgres connection string).`);
+  process.exit(exitCode);
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+async function main() {
+  const args = new Set(process.argv.slice(2));
+  if (args.has('--help') || args.has('-h')) usage(0);
+  const dryRun = args.has('--dry-run');
+  const checkOnly = args.has('--check');
 
-const migrationSQL = `
--- Create pp_optimization_history table for storing optimization results
-CREATE TABLE IF NOT EXISTS pp_optimization_history (
-  id uuid default gen_random_uuid() primary key,
-  session_id text not null,
-  prompt_original text not null,
-  prompt_optimized text not null,
-  mode text not null,
-  explanation text default '',
-  share_id text unique,
-  created_at timestamptz default now()
-);
-
--- Add indexes for performance
-CREATE INDEX IF NOT EXISTS idx_pp_optimization_history_session_id 
-  ON pp_optimization_history(session_id);
-
-CREATE INDEX IF NOT EXISTS idx_pp_optimization_history_share_id 
-  ON pp_optimization_history(share_id) WHERE share_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_pp_optimization_history_created_at 
-  ON pp_optimization_history(created_at DESC);
-`;
-
-async function runMigration() {
-  console.log('🚀 Starting database migration...\n');
-  console.log('📋 Creating pp_optimization_history table...');
-  
-  try {
-    // Use Supabase's SQL query endpoint via REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': supabaseServiceKey,
-        'Authorization': `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({ query: migrationSQL }),
-    });
-
-    // If the RPC method doesn't exist, try direct SQL execution
-    if (!response.ok) {
-      console.log('⚠️  RPC method not available, trying alternative approach...\n');
-      
-      // Alternative: Use the Supabase client to verify table creation
-      const { error } = await supabase
-        .from('pp_optimization_history')
-        .select('id')
-        .limit(1);
-      
-      if (error && error.message.includes('relation "pp_optimization_history" does not exist')) {
-        console.error('❌ Error: Could not create table automatically.\n');
-        console.log('📝 Please run the migration manually:');
-        console.log('\n1. Go to your Supabase Dashboard:');
-        console.log(`   ${supabaseUrl.replace('/rest/v1', '')}`);
-        console.log('\n2. Navigate to: SQL Editor → New query');
-        console.log('\n3. Copy and paste the SQL from:');
-        console.log('   supabase/SETUP_SHARE_FEATURE.sql');
-        console.log('\n4. Click "Run" to execute the migration\n');
-        process.exit(1);
-      }
-      
-      console.log('✅ Table already exists or was created successfully!\n');
-    } else {
-      console.log('✅ Migration completed successfully!\n');
-    }
-
-    // Verify the table was created
-    console.log('🔍 Verifying table structure...');
-    const { error: verifyError } = await supabase
-      .from('pp_optimization_history')
-      .select('id')
-      .limit(0);
-    
-    if (verifyError) {
-      console.error('⚠️  Warning: Could not verify table:', verifyError.message);
-      console.log('\n📝 Please verify manually in Supabase Dashboard\n');
-    } else {
-      console.log('✅ Table verified successfully!\n');
-      console.log('🎉 Migration complete! You can now use the share feature.\n');
-      console.log('💡 Try optimizing a prompt - the Share button will appear after completion.\n');
-    }
-
-  } catch (error) {
-    console.error('❌ Migration failed:', error.message);
-    console.log('\n📝 Manual Migration Instructions:');
-    console.log('\n1. Go to your Supabase Dashboard:');
-    console.log(`   ${supabaseUrl.replace('/rest/v1', '')}`);
-    console.log('\n2. Navigate to: SQL Editor → New query');
-    console.log('\n3. Copy and paste the SQL from:');
-    console.log('   supabase/SETUP_SHARE_FEATURE.sql');
-    console.log('\n4. Click "Run" to execute the migration\n');
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('❌ Missing DATABASE_URL.');
+    console.error('   Set it to your Postgres connection string, e.g.:');
+    console.error('     DATABASE_URL=postgresql://postgres:password@db.<ref>.supabase.co:5432/postgres');
+    console.error('   For local dev, point it at your ephemeral Postgres or `supabase db start`.');
+    console.error('   (.env.example documents all required variables.)');
     process.exit(1);
+  }
+
+  const { Client } = require('pg');
+  const client = new Client({
+    connectionString: databaseUrl,
+    // Supabase pooler / managed instances require TLS; local ephemeral does not.
+    ssl: /localhost|127\.0\.0\.1/.test(databaseUrl) ? false : { rejectUnauthorized: false },
+  });
+
+  await client.connect();
+  try {
+    // Tracking table lives outside `public` so app RLS never interferes.
+    await client.query(`CREATE SCHEMA IF NOT EXISTS ${TRACKING_SCHEMA}`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${TRACKING_TABLE} (
+        version TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+
+    const { rows: appliedRows } = await client.query(`SELECT version FROM ${TRACKING_TABLE}`);
+    const applied = new Set(appliedRows.map((r) => r.version));
+
+    const files = fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const pending = files.filter((f) => !applied.has(f));
+
+    console.log(`🚀 PromptPerfect migrations — ${applied.size} applied, ${pending.length} pending.\n`);
+
+    if (pending.length === 0) {
+      console.log('✅ Database is up to date. Nothing to do.');
+      return;
+    }
+
+    if (checkOnly) {
+      console.log('⏳ Pending migrations:');
+      for (const f of pending) console.log(`   - ${f}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (dryRun) {
+      console.log('🔍 Dry run — would apply, in order:');
+      for (const f of pending) console.log(`   - ${f}`);
+      return;
+    }
+
+    for (const file of pending) {
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+      if (!sql.trim() || sql.trim().startsWith('-- empty')) {
+        console.log(`⏭️  Skipping empty ${file}`);
+      } else {
+        console.log(`📋 Applying ${file} ...`);
+        // One transaction per file (atomic). pg supports multi-statement
+        // strings; a failure rolls back the whole file, which stays pending.
+        await client.query('BEGIN');
+        try {
+          await client.query(sql);
+          await client.query(`INSERT INTO ${TRACKING_TABLE} (version) VALUES ($1)`, [file]);
+          await client.query('COMMIT');
+          console.log(`✅ ${file} applied.`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          console.error(`❌ ${file} failed — rolled back. Fix the file and re-run.`);
+          throw err;
+        }
+      }
+    }
+
+    console.log('\n🎉 All migrations applied. Database is up to date.');
+  } finally {
+    await client.end();
   }
 }
 
-runMigration();
+main().catch((err) => {
+  console.error(err && err.message ? `Migration error: ${err.message}` : err);
+  process.exit(1);
+});

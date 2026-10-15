@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/auth/rateLimit';
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit';
 import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 const TIMEOUT_MS = 5000;
@@ -36,9 +36,7 @@ const CHECK_URLS: Record<
 };
 
 export async function POST(req: Request) {
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!checkRateLimit(ip, 20)) {
+  if (!checkRateLimit(rateLimitKey('verify-key', req), 20)) {
     return NextResponse.json(
       { ok: false, reason: 'Too many requests' },
       { status: 429 },

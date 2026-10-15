@@ -211,3 +211,15 @@ The rate limiter is **in-memory and per-process**. It works correctly for single
 | PP-703-G | `/api/guest-usage` | Medium | No `guestId` format/length validation in POST handler | Added regex validation in POST and GET |
 | PP-703-H | Multiple routes | Low | Raw Supabase `error.message` forwarded to client | Replaced with generic strings; added server-side logging |
 | PP-703-I | In-memory rate limiter | Low | Not shared across serverless instances | Documented; in-process limiter deployed as interim measure |
+
+---
+
+## Addendum — 2026-10-14 (production-hardening pass)
+
+| ID | Route / Area | Severity | Description | Fix |
+|---|---|---|---|---|
+| PP-1014-A | `/api/feedback` | Medium | Manual field checks ignored the shared `parseFeedbackBody` schema (no length caps); no rate limit on an unauthenticated DB-write path | Route now parses via `parseFeedbackBody` (caps + trims) and enforces `checkRateLimit(ip, 30)` → 429 |
+| PP-1014-B | `/api/auth/update-user` | Medium | `provider`/`model`/`api_key` accepted without allowlist or length bounds; no rate limit | Provider allowlisted (`gemini/openai/anthropic`), model ≤128 chars, `api_key` ≤2000 chars, `checkRateLimit(ip, 20)`; secret-boundary note in code (scoped service-role write, never logged/echoed) |
+| PP-1014-C | Global headers | Low | No Content-Security-Policy (XSS second barrier missing) | CSP added in `next.config.ts` (`default-src 'self'`, `unsafe-inline` for Next/Tailwind scripts+styles, Supabase hosts for connect, `frame-ancestors 'none'`); existing DENY/nosniff/HSTS/Permissions-Policy retained |
+| PP-1014-D | `supabase/migrations` | Low | `20250408100000` and `20260420120000` ran bare `ALTER FUNCTION … OWNER TO postgres`, failing on environments without a `postgres` role | Backported the defensive `EXCEPTION WHEN undefined_object OR insufficient_privilege` pattern from `20261012000000_production_hardening.sql`; full migrate → check → seed → verify pipeline re-run locally (23 migrations, 47/47 checks green) |
+| PP-1014-E | `/api/feedback`, `/api/stats`, `/api/saved-prompts`, `/api/auth/update-user`, `/api/share/generate`, `/api/optimize-sync` | Medium | Raw Supabase/Postgres `error.message` forwarded to the client in 500/GET/POST/DELETE/catch paths (PP-703-H regression on new code); internals (relation names, column names, constraint text) leaked | All non-missing-table failures now return static generics (`Could not save feedback`, `Could not load stats`, `Could not load/save/delete prompt`, `Update failed`, `Internal server error`, `Invalid request`) with the raw message only in server-side `logWarn`; missing-table 503 hint retained for the actionable migration case; 5 new `never leaks internal …` regression tests added |

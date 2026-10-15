@@ -141,7 +141,7 @@ export default function SignUpPage() {
           We sent a verification link to{' '}
           <span className="font-medium text-[#E7E6D9]">{email.trim()}</span>.
           After you confirm, you can{' '}
-          <Link href="/login" className="text-[#4552FF] hover:underline">
+          <Link href="/login" className="text-accent-text hover:underline">
             sign in
           </Link>{' '}
           with your password.
@@ -280,7 +280,7 @@ export default function SignUpPage() {
         Already have an account?{' '}
         <Link
           href="/login"
-          className="font-medium text-[#4552FF] transition hover:text-[#6b75ff]"
+          className="font-medium text-accent-text transition hover:text-[#6b75ff]"
         >
           Log in
         </Link>

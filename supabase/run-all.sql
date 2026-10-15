@@ -1,3 +1,6 @@
+-- DEPRECATED: kept for reference / manual SQL-Editor paste only.
+-- Source of truth is supabase/migrations/ applied via `npm run db:migrate`.
+-- This file is NOT executed by CI and may lag behind migrations.
 -- Run this entire file in Supabase Dashboard → SQL Editor (in order).
 
 -- 1. Fix optimization_logs mode constraint

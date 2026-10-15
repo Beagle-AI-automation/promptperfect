@@ -24,7 +24,8 @@ CREATE INDEX IF NOT EXISTS guest_usage_guest_id_idx ON guest_usage (guest_id);
 
 ALTER TABLE guest_usage ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS guest_usage_service_only ON guest_usage
+DROP POLICY IF EXISTS guest_usage_service_only ON guest_usage;
+CREATE POLICY guest_usage_service_only ON guest_usage
   FOR ALL
   USING (auth.role() = 'service_role')
   WITH CHECK (auth.role() = 'service_role');
@@ -44,15 +45,18 @@ CREATE INDEX IF NOT EXISTS idx_pp_user_profiles_email ON pp_user_profiles (email
 
 ALTER TABLE pp_user_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS pp_user_profiles_select_all ON pp_user_profiles
+DROP POLICY IF EXISTS pp_user_profiles_select_all ON pp_user_profiles;
+CREATE POLICY pp_user_profiles_select_all ON pp_user_profiles
   FOR SELECT
   USING (true);
 
-CREATE POLICY IF NOT EXISTS pp_user_profiles_insert_all ON pp_user_profiles
+DROP POLICY IF EXISTS pp_user_profiles_insert_all ON pp_user_profiles;
+CREATE POLICY pp_user_profiles_insert_all ON pp_user_profiles
   FOR INSERT
   WITH CHECK (true);
 
-CREATE POLICY IF NOT EXISTS pp_user_profiles_update_all ON pp_user_profiles
+DROP POLICY IF EXISTS pp_user_profiles_update_all ON pp_user_profiles;
+CREATE POLICY pp_user_profiles_update_all ON pp_user_profiles
   FOR UPDATE
   USING (true)
   WITH CHECK (true);

@@ -1,0 +1,21 @@
+# Local production-like run: builds the image and serves it on :3000.
+# Supabase is SaaS here, so no database service is needed — only runtime env.
+# Usage:
+#   cp .env.example .env.local   # then fill in real keys
+#   docker compose up --build
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

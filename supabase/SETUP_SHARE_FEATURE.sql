@@ -1,3 +1,6 @@
+-- DEPRECATED: superseded by supabase/migrations/20250321000000_create_optimization_history.sql
+-- (+ later hardening). Kept for manual SQL-Editor reference only.
+-- Prefer `npm run db:migrate`.
 -- PromptPerfect Database Setup
 -- Run this entire file in Supabase Dashboard → SQL Editor
 -- https://ideifzsqrpygaxisisuj.supabase.co/

@@ -3,7 +3,7 @@ import {
   getSupabaseAdminClient,
   getSupabaseUrl,
   normalizeEnvValue,
-} from '@/lib/client/supabase';
+} from '@/lib/server/supabase';
 import { createRouteHandlerClient } from '@/lib/server/supabase';
 
 export function getAnonKey(): string | null {
@@ -85,6 +85,15 @@ export async function resolveIdentity(request: Request): Promise<
   return undefined;
 }
 
+/**
+ * DB client for an already-authenticated identity.
+ *
+ * SECURITY INVARIANT: every caller MUST scope all reads/writes with
+ * `.eq('user_id', identity.userId)`. The admin client bypasses RLS by design
+ * (needed for cross-table server ops); the per-user scoping in each route is
+ * what enforces isolation. When `identity.token` exists and no admin key is
+ * configured, a token-scoped (RLS) client is returned instead.
+ */
 export function getDbForIdentity(identity: {
   userId: string;
   token?: string;

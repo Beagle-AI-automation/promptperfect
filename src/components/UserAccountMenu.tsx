@@ -30,7 +30,7 @@ function MenuAvatar({ src }: { src: string }) {
   const [broken, setBroken] = useState(false);
   if (broken) {
     return (
-      <User className="h-[18px] w-[18px] text-[#71717A]" aria-hidden strokeWidth={1.75} />
+      <User className="h-[18px] w-[18px] text-[#8a8a8a]" aria-hidden strokeWidth={1.75} />
     );
   }
   return (
@@ -193,6 +193,8 @@ export function UserAccountMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? `${menuId}-panel` : undefined}
+        aria-label={`Account menu, ${displayName}`}
+        title={`Account menu, ${displayName}`}
         onClick={() => setOpen((o) => !o)}
         className="flex h-10 max-w-[min(100vw-8rem,14rem)] items-center gap-2 rounded-full border border-[#2a2a2a] bg-[#0f0f0f] py-1 pl-1 pr-2 transition hover:border-[#3f3f3f] hover:bg-[#141414]"
       >
@@ -200,11 +202,11 @@ export function UserAccountMenu({
           {rawAvatarUrl ? (
             <MenuAvatar key={rawAvatarUrl} src={rawAvatarUrl} />
           ) : (
-            <User className="h-[18px] w-[18px] text-[#71717A]" aria-hidden strokeWidth={1.75} />
+            <User className="h-[18px] w-[18px] text-[#8a8a8a]" aria-hidden strokeWidth={1.75} />
           )}
         </span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-[#71717A] transition ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-[#8a8a8a] transition ${open ? 'rotate-180' : ''}`}
           aria-hidden
         />
       </button>

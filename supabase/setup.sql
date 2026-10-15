@@ -1,3 +1,8 @@
+-- DEPRECATED: kept for reference / manual SQL-Editor paste only.
+-- Source of truth is supabase/migrations/ applied via `npm run db:migrate`
+-- (node supabase/migrate.js with DATABASE_URL). This file is NOT executed
+-- by CI and may lag behind migrations. Do not add new schema here.
+--
 -- PromptPerfect: Run this entire file in Supabase SQL Editor
 -- Dashboard → SQL Editor → New query → Paste & Run
 

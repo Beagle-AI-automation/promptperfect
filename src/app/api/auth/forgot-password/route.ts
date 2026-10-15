@@ -1,4 +1,4 @@
-import { checkRateLimit } from '@/lib/auth/rateLimit';
+import { checkRateLimit, rateLimitKey } from '@/lib/auth/rateLimit';
 import {
   mapPasswordResetEmailError,
   resolvePasswordResetRedirect,
@@ -8,9 +8,10 @@ import {
   getSupabaseAdminClient,
   getSupabaseUrl,
   normalizeEnvValue,
-} from '@/lib/client/supabase';
+} from '@/lib/server/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { logWarn } from '@/lib/logger';
 
 function isLocalRedirect(redirectTo: string): boolean {
   try {
@@ -27,9 +28,7 @@ function isLocalRedirect(redirectTo: string): boolean {
  * when Supabase email is rate-limited or undelivered.
  */
 export async function POST(request: Request) {
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!checkRateLimit(ip, 8)) {
+  if (!checkRateLimit(rateLimitKey('auth/forgot-password', request), 8)) {
     return NextResponse.json(
       { error: 'Too many attempts. Please wait a minute.' },
       { status: 429 },
@@ -88,16 +87,11 @@ export async function POST(request: Request) {
       msg.includes('user not found') ||
       msg.includes('unable to find');
     if (notFound) {
-      return NextResponse.json(
-        {
-          error:
-            'No account exists for this email. Sign up first, or use Continue with Google on the login page if you registered that way.',
-          code: 'ACCOUNT_NOT_FOUND',
-        },
-        { status: 404 },
-      );
+      // Anti-enumeration: never reveal whether an email is registered.
+      // Respond exactly like a success so attackers can't harvest accounts.
+      return NextResponse.json({ ok: true, emailSent: true });
     }
-    console.error('[forgot-password] generateLink error:', genError.message);
+    logWarn('forgot-password', `generateLink failed: ${genError.message}`);
     const mapped = mapPasswordResetEmailError(genError.message, redirectTo);
     return NextResponse.json(
       { error: mapped.error, code: mapped.code },
@@ -106,14 +100,8 @@ export async function POST(request: Request) {
   }
 
   if (!linkData?.user?.id) {
-    return NextResponse.json(
-      {
-        error:
-          'No account exists for this email. Sign up first, or use Continue with Google on the login page.',
-        code: 'ACCOUNT_NOT_FOUND',
-      },
-      { status: 404 },
-    );
+    // Anti-enumeration: same generic success as if the email existed.
+    return NextResponse.json({ ok: true, emailSent: true });
   }
 
   const recoveryLink =
@@ -150,7 +138,7 @@ export async function POST(request: Request) {
   }
 
   const msg = emailError.message?.trim() || '';
-  console.error('[forgot-password] resetPasswordForEmail error:', msg);
+  logWarn('forgot-password', `resetPasswordForEmail failed: ${msg}`);
   const mapped = mapPasswordResetEmailError(msg, redirectTo);
 
   // Local dev: Supabase rate-limits emails (~1/min) but generateLink still works.

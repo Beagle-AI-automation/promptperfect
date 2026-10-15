@@ -1,7 +1,44 @@
+/** Default max free optimizations for anonymous guests before signup is required. */
+const DEFAULT_GUEST_TOKEN_LIMIT = 5;
+
+/**
+ * Resolve the guest limit, allowing a local-dev override via
+ * `NEXT_PUBLIC_GUEST_TOKEN_LIMIT`. Falls back to the product default (5).
+ */
+function resolveGuestLimit(): number {
+  const raw = process.env.NEXT_PUBLIC_GUEST_TOKEN_LIMIT;
+  const n = raw != null && raw !== '' ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_GUEST_TOKEN_LIMIT;
+}
+
+import { isUnlimitedMode } from './localMode';
+
 /** Max free optimizations for anonymous guests before signup is required. */
-export const GUEST_TOKEN_LIMIT = 5;
+export const GUEST_TOKEN_LIMIT = resolveGuestLimit();
 /** Alias for UI and API routes that imported `GUEST_LIMIT` historically. */
 export const GUEST_LIMIT = GUEST_TOKEN_LIMIT;
+
+/**
+ * Canonical guest-id format: UUIDs (crypto.randomUUID) or short alphanumeric
+ * identifiers (`guest-…` legacy), 4–80 chars. Use in every API route that
+ * accepts a guestId so validation is uniform and guessing is bounded.
+ */
+const GUEST_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
+
+/** True when `guestId` matches the canonical format. */
+export function isValidGuestId(guestId: unknown): guestId is string {
+  return typeof guestId === 'string' && GUEST_ID_PATTERN.test(guestId);
+}
+
+/**
+ * Validate a guestId from an untrusted request body. Returns the trimmed id,
+ * or `null` when missing/malformed (caller responds 400).
+ */
+export function assertGuestId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const id = value.trim();
+  return isValidGuestId(id) ? id : null;
+}
 
 const GUEST_ID_KEY = 'pp_guest_id';
 const GUEST_TOKENS_KEY = 'pp_guest_tokens_used';
@@ -14,7 +51,7 @@ function getStorage(storage?: Storage): Storage | null {
 }
 
 /**
- * Stable guest id for demo usage tracking (e.g. `record-demo-usage` `sessionId`).
+ * Stable guest id for demo usage tracking (e.g. `guest-usage` `guestId`).
  */
 export function getGuestId(storage?: Storage): string {
   const s = getStorage(storage);
@@ -86,12 +123,28 @@ export function incrementGuestCount(delta: number = 1, storage?: Storage): numbe
 }
 
 /**
+ * Decrement stored guest usage by `delta` (default 1), flooring at 0.
+ * Used to refund the optimistic reservation when an optimization fails,
+ * so failed attempts don't burn free quota.
+ */
+export function decrementGuestCount(delta: number = 1, storage?: Storage): number {
+  const next = Math.max(
+    0,
+    getGuestCount(storage) - Math.max(0, Math.floor(delta)),
+  );
+  setGuestCount(next, storage);
+  return next;
+}
+
+/**
  * When `tokensUsed` is omitted, uses the value from `getGuestCount()`.
  */
 export function isGuestLimitReached(
   tokensUsed?: number,
   limit: number = GUEST_TOKEN_LIMIT,
 ): boolean {
+  // Unlimited local-dev mode: the quota gate is fully disabled.
+  if (isUnlimitedMode()) return false;
   const used = tokensUsed !== undefined ? tokensUsed : getGuestCount();
   return used >= limit;
 }

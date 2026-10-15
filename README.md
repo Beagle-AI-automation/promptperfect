@@ -16,7 +16,9 @@ PromptPerfect takes your draft prompts—whether vague, messy, or just a rough i
   - **Better**: General improvement for clarity and robustness.
   - **Specific**: Adds constraints and details to reduce hallucinations.
   - **Chain-of-Thought**: Structures the prompt to encourage step-by-step reasoning.
+  - **Production Audit**: Link a project directory (analyzed locally in your browser, files stay on your device) and get the integral master prompt — everything that codebase needs to reach production-ready level.
 - **Privacy-First**: Your API keys are stored locally in your browser and never saved to our servers.
+- **Template Library**: 60 production-ready prompt templates across 60 categories (SaaS, Fintech, AI Agent, Legal, Security…) — fork any of them into the optimizer with one click. Works offline, no account needed.
 - **Open Source**: Built with modern web technologies, free to use and extend.
 - **n8n Integration**: Ready-to-import workflow templates for automation (see `examples/`).
 
@@ -73,7 +75,7 @@ Follow these steps to run PromptPerfect locally on your machine.
 
 ### Prerequisites
 
-- Node.js 18+ installed
+- Node.js 22 (see `.nvmrc`; `engines` requires >=20.9.0)
 - A Google Gemini API key (or OpenAI/Anthropic key for BYOK)
 
 ### Installation
@@ -85,11 +87,16 @@ Follow these steps to run PromptPerfect locally on your machine.
     cd promptperfect
     ```
 
-2.  **Install dependencies:**
+2.  **Install dependencies (locked install only):**
 
     ```bash
-    npm install
+    npm ci
     ```
+
+    > Plain `npm install` is known-broken upstream (`ai@6` pins a
+    > `@ai-sdk/provider-utils` version missing from the registry) — always use
+    > `npm ci` so the install matches `package-lock.json`.
+    > See `docs/adr/0002-request-validation-without-zod.md`.
 
 3.  **Configure environment variables:**
 
@@ -125,6 +132,31 @@ Follow these steps to run PromptPerfect locally on your machine.
 
     Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+5.  **Verify your setup** (same gates CI runs on every PR):
+
+    ```bash
+    npm run typecheck   # strict TypeScript, zero errors
+    npm run lint        # ESLint (Next.js core-web-vitals + TypeScript)
+    npm run test:run    # vitest suite, colocated *.test.ts(x) files
+    npm run build       # production build
+    ```
+
+### Useful commands
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Local dev server with Turbopack |
+| `npm run test:coverage` | Test suite with V8 coverage report (`./coverage`) |
+| `npm run db:migrate` | Apply `supabase/migrations/*.sql` (`DATABASE_URL` required) |
+| `npm run db:verify` | 47 DB assertions: schema, CHECK enforcement, RLS, triggers |
+| `npm run db:seed` | Idempotent local-dev fixtures (never on production) |
+| `npm run db:check` | Exit 1 if migrations pending (pre-deploy gate) |
+| `docker build -t promptperfect .` | Validate the production container (see `Dockerfile`) |
+
+- **Browser extension:** load `extension/` unpacked via `chrome://extensions` (details in `extension/README.md`); it calls `/api/optimize-sync` with your own provider key (BYOK).
+- **API validation:** new payload routes must extend the zero-dependency parsers in `src/lib/apiSchemas.ts` — no Zod (see `docs/adr/0002-request-validation-without-zod.md`).
+- **Supabase clients:** browser code uses `@/lib/client/supabaseBrowser`, server code uses `@/lib/server/supabase` — never the reverse (see `docs/adr/0001-supabase-client-factories.md`).
+
 ## Integrations
 
 ### n8n Workflow Automation
@@ -137,6 +169,66 @@ PromptPerfect includes ready-to-import n8n workflow templates for automating pro
 3. Start automating!
 
 See `examples/README.md` for full documentation and advanced use cases.
+
+## API
+
+Base URL: your deployment (local: `http://localhost:3000`). Errors share one
+envelope: `{ "error": "message" }` (+ `hint`/`code` on some routes).
+
+### POST `/api/optimize` — streaming (Gemini)
+
+```bash
+curl -N -X POST http://localhost:3000/api/optimize \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "Write a haiku about caching", "mode": "better"}'
+```
+
+Body: `prompt` (or `text`, max 100k chars), `mode`, optional `apiKey`
+(BYOK Gemini key), optional `session_id` (for feedback linkage).
+Streams `text/plain`. `400` on validation errors, `500` with a user-facing
+message (quota/retired-model/key problems are mapped to actionable copy).
+
+### POST `/api/optimize-sync` — JSON, multi-provider, extension-compatible
+
+```bash
+curl -X POST http://localhost:3000/api/optimize-sync \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "...", "mode": "production", "provider": "openai"}'
+```
+
+Body adds `provider` (`gemini`|`openai`|`anthropic`), `apiKey` (or
+`Authorization: Bearer`). Without a key you need a Supabase session —
+except in local unlimited mode with a server key configured.
+Returns `{ optimizedText, explanation, changes, rawText, provider, model }`.
+CORS: allowlisted origins (`ALLOWED_ORIGINS`) + browser-extension schemes;
+`OPTIONS` handled. Rate limit: 30 req/min per IP (disabled in unlimited mode).
+
+### POST `/api/translate` — ES⇄EN
+
+Body: `text` (max 50k chars), `targetLang` (`es`|`en`), optional
+`provider`/`apiKey` (same auth gate as optimize-sync).
+Returns `{ translatedText, targetLang, model }`. Code, `{{PLACEHOLDERS}}`,
+markdown and `---EXPLANATION---` markers are preserved byte-identical.
+
+### Modes & providers
+
+Modes: `better` (default), `specific`, `cot`, `developer`, `research`,
+`beginner`, `product`, `marketing`, `production`. Unknown modes fall back to
+`better`. Providers default per `GEMINI_MODEL` (`gemini-3.5-flash`),
+`OPENAI_MODEL` (`gpt-6-astra`, effort via `OPENAI_REASONING_EFFORT=high`),
+Anthropic Haiku. Output always splits on `---EXPLANATION---` / `---CHANGES---`.
+
+### Other routes
+
+| Route | Purpose |
+|---|---|
+| `GET /api/config` | `{ providers, models, unlimited }` capability map (no secrets) |
+| `GET/POST /api/guest-usage` | Anonymous quota tracking (`{guestId}`) |
+| `POST /api/feedback` | Thumbs feedback linked by `sessionId` |
+| `GET/POST/DELETE /api/saved-prompts` | Library CRUD (paginated: `?limit&offset` → `{prompts, nextOffset, total}`) |
+| `POST /api/share/generate` | Share links for history rows (auth) |
+| `GET /api/stats` | Usage aggregates (auth) |
+| `POST /api/verify-key` | Validate a provider key (auth) |
 
 ## Deploy Your Own
 
@@ -164,7 +256,7 @@ Yes. Your API key is sent from your browser directly to the LLM provider's API. 
 
 ### How do I add a new optimization mode?
 
-Add a new prompt string to [`src/lib/prompts.ts`](src/lib/prompts.ts) and a corresponding option in the [`ModeSelector`](src/components/ModeSelector.tsx) component. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
+Add a new prompt string to [`src/lib/prompts.ts`](src/lib/prompts.ts) and a corresponding option in the [`AppModeSelector`](src/components/AppModeSelector.tsx) component. See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ### How is this different from DSPy or PromptFoo?
 

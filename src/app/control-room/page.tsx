@@ -9,7 +9,7 @@ import { resolveAuthUserAndSession } from '@/lib/client/ppUserSync';
 
 const PROVIDER_MODELS: Record<Provider, string> = {
   gemini: 'gemini-2.0-flash',
-  openai: 'gpt-4o-mini',
+  openai: 'gpt-6-astra',
   anthropic: 'claude-3-5-haiku-20241022',
 };
 
@@ -180,7 +180,7 @@ export default function ControlRoomPage() {
               }}
               className={`rounded-xl border-2 bg-zinc-900/80 p-4 text-left transition ${
                 provider === p
-                  ? 'border-[#4552FF] shadow-[0_0_16px_rgba(69,82,255,0.33)]'
+                  ? 'border-accent shadow-[0_0_16px_rgba(69,82,255,0.33)]'
                   : 'border-zinc-700 hover:border-zinc-600'
               }`}
             >
@@ -210,7 +210,7 @@ export default function ControlRoomPage() {
               type="button"
               onClick={handleContinue}
               disabled={saving}
-              className="mt-6 w-full rounded-lg bg-[#4552FF] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="mt-6 w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               Enter PromptPerfect →
             </button>
@@ -237,7 +237,7 @@ export default function ControlRoomPage() {
                       setVerifyMessage('');
                     }}
                     placeholder="sk-..."
-                    className="mt-1 w-full rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-[#ECECEC] placeholder-zinc-500 focus:border-[#4552FF] focus:outline-none"
+                    className="mt-1 w-full rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-[#ECECEC] placeholder-zinc-500 focus:border-accent focus:outline-none"
                   />
                 </div>
                 <button
@@ -275,7 +275,7 @@ export default function ControlRoomPage() {
               type="button"
               onClick={handleContinue}
               disabled={saving}
-              className="mt-6 w-full rounded-lg bg-[#4552FF] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="mt-6 w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               Enter PromptPerfect →
             </button>

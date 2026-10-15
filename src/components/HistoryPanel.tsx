@@ -1,26 +1,15 @@
 'use client';
 
-import type { MouseEvent } from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
-import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
-import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
+import { History, Plus, Trash2 } from 'lucide-react';
+import { useOptimizationHistory } from '@/hooks/useOptimizationHistory';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
-  getLocalHistoryForSession,
-  getOrCreateSessionId,
-} from '@/lib/client/optimizationHistory';
+  formatHistoryTime,
+  previewPrompt,
+  type OptimizationHistoryItem,
+} from '@/lib/historyMerge';
 
-export interface OptimizationHistoryItem {
-  id: string;
-  session_id: string;
-  /** Per-run id matching `optimization_logs.session_id` (feedback). */
-  optimize_session_id?: string | null;
-  prompt_original: string;
-  prompt_optimized: string;
-  mode: string;
-  explanation: string;
-  created_at: string;
-}
+export type { OptimizationHistoryItem };
 
 interface HistoryPanelProps {
   onSelect: (item: OptimizationHistoryItem) => void;
@@ -39,21 +28,6 @@ interface HistoryPanelProps {
   historySessionId?: string;
 }
 
-function formatTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    // swallow: invalid ISO string or Intl unavailable — return raw value
-    return iso;
-  }
-}
-
 export function HistoryPanel({
   onSelect,
   onNewPrompt,
@@ -63,219 +37,24 @@ export function HistoryPanel({
   userId,
   historySessionId,
 }: HistoryPanelProps) {
-  const [rows, setRows] = useState<OptimizationHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const uid = userId?.trim();
-    const browserSid = historySessionId?.trim() || getOrCreateSessionId() || '';
-    const client = createSupabaseBrowserClient();
-
-    if (uid) {
-      setLoading(true);
-      try {
-        const headers = client ? await getPromptPerfectAuthHeaders(client) : null;
-
-        // 1. History rows properly linked to this account (user_id set).
-        const apiRowsPromise: Promise<OptimizationHistoryItem[]> = headers
-          ? fetch('/api/history', { headers })
-              .then((r) => (r.ok ? r.json() : Promise.reject()))
-              .then((j: { items?: OptimizationHistoryItem[] }) => j.items ?? [])
-              .catch(() => [])
-          : Promise.resolve([]);
-
-        // 2. Older history rows saved under this browser session (user_id was null before the bug-fix).
-        const sessionRowsPromise: Promise<OptimizationHistoryItem[]> =
-          client && browserSid
-            ? Promise.resolve(
-                client
-                  .from('pp_optimization_history')
-                  .select(
-                    'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
-                  )
-                  .eq('session_id', browserSid)
-                  .order('created_at', { ascending: false })
-                  .limit(50),
-              )
-                .then(({ data }) => (data as OptimizationHistoryItem[]) ?? [])
-                .catch(() => [])
-            : Promise.resolve([]);
-
-        // 3. Library saves — so history is never empty when the user has saved prompts.
-        type LibraryRow = {
-          id: string;
-          title: string;
-          original_prompt: string;
-          optimized_prompt: string;
-          explanation: string;
-          mode: string;
-          created_at: string;
-        };
-        const libraryRowsPromise: Promise<OptimizationHistoryItem[]> = headers
-          ? fetch('/api/saved-prompts', { headers })
-              .then((r) => (r.ok ? r.json() : Promise.reject()))
-              .then((j: { prompts?: LibraryRow[] }) =>
-                (j.prompts ?? []).map((p) => ({
-                  id: `lib-${p.id}`,
-                  session_id: '',
-                  optimize_session_id: null,
-                  prompt_original: p.original_prompt,
-                  prompt_optimized: p.optimized_prompt,
-                  mode: p.mode,
-                  explanation: p.explanation ?? '',
-                  created_at: p.created_at,
-                })),
-              )
-              .catch(() => [])
-          : Promise.resolve([]);
-
-        const [apiRows, sessionRows, libraryRows] = await Promise.all([
-          apiRowsPromise,
-          sessionRowsPromise,
-          libraryRowsPromise,
-        ]);
-
-        // Merge history rows first (they carry delete buttons).
-        const seen = new Set<string>();
-        const seenPrompts = new Set<string>();
-        const merged: OptimizationHistoryItem[] = [];
-
-        for (const row of [...apiRows, ...sessionRows]) {
-          if (!seen.has(row.id)) {
-            seen.add(row.id);
-            // Track the prompt text so library duplicates are skipped below.
-            const key = row.prompt_original.trim().slice(0, 200);
-            if (key) seenPrompts.add(key);
-            merged.push(row);
-          }
-        }
-
-        // Only add a library item when there is no matching history entry,
-        // preventing duplicates when a prompt is both optimized and saved.
-        for (const row of libraryRows) {
-          if (!seen.has(row.id)) {
-            const key = row.prompt_original.trim().slice(0, 200);
-            if (!seenPrompts.has(key)) {
-              seen.add(row.id);
-              seenPrompts.add(key);
-              merged.push(row);
-            }
-          }
-        }
-
-        merged.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-        setRows(merged.slice(0, 50));
-      } catch {
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // Guest: session-scoped local + Supabase query.
-    if (!browserSid) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const localRows = getLocalHistoryForSession(browserSid);
-      if (!client) {
-        setRows(
-          [...localRows]
-            .sort(
-              (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-            )
-            .slice(0, 20),
-        );
-        return;
-      }
-
-      const { data, error } = await client
-        .from('pp_optimization_history')
-        .select(
-          'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at',
-        )
-        .eq('session_id', browserSid)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      const remote = (data as OptimizationHistoryItem[]) ?? [];
-      const merged = [...remote, ...localRows].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-      setRows(merged.slice(0, 20));
-    } catch {
-      const localRows = getLocalHistoryForSession(browserSid);
-      setRows(
-        [...localRows]
-          .sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-          )
-          .slice(0, 20),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [historySessionId, userId]);
-
-  useEffect(() => {
-    void load();
-  }, [load, refreshTrigger]);
-
-  const handleDelete = useCallback(
-    async (e: MouseEvent<HTMLButtonElement>, itemId: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const uid = userId?.trim();
-      if (!uid || deletingId) return;
-      const client = createSupabaseBrowserClient();
-      if (!client) return;
-      setDeletingId(itemId);
-      setDeleteError(null);
-      try {
-        const headers = await getPromptPerfectAuthHeaders(client);
-        if (!headers) {
-          setDeleteError('Authentication error. Please refresh and try again.');
-          return;
-        }
-        const res = await fetch(
-          `/api/history?id=${encodeURIComponent(itemId)}`,
-          { method: 'DELETE', headers },
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({})) as { error?: string };
-          setDeleteError(body.error ?? 'Failed to delete. Please try again.');
-          return;
-        }
-        onDeleted?.(itemId);
-        await load();
-      } catch {
-        setDeleteError('Network error. Please try again.');
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [userId, deletingId, load, onDeleted],
-  );
+  const {
+    rows,
+    loading,
+    deletingId,
+    deleteError,
+    removeItem,
+    dismissError,
+  } = useOptimizationHistory({
+    userId,
+    historySessionId,
+    refreshTrigger,
+    onDeleted,
+  });
 
   return (
     <div className="flex h-full flex-col border-l border-[#1a1a1a] bg-[#0a0a0a]">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#1a1a1a] px-3 py-2">
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#666]">
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#808088]">
           History
         </span>
         {onNewPrompt ? (
@@ -296,7 +75,7 @@ export function HistoryPanel({
           <p className="text-[11px] text-rose-400">{deleteError}</p>
           <button
             type="button"
-            onClick={() => setDeleteError(null)}
+            onClick={() => dismissError()}
             className="mt-0.5 text-[10px] text-rose-500/70 underline hover:text-rose-400"
           >
             Dismiss
@@ -305,66 +84,53 @@ export function HistoryPanel({
       )}
       <div className="min-h-0 flex-1 overflow-y-auto pp-history-scroll">
         {loading ? (
-          <p className="px-3 py-2 text-[13px] text-[#666]">Loading…</p>
+          <p className="px-3 py-2 text-[13px] text-[#808088]" aria-busy="true">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="px-3 py-2 text-[13px] text-[#666]">No history yet.</p>
+          <EmptyState
+            icon={History}
+            title="No history yet"
+            description="Run an optimization and it will show up here so you can revisit, re-run, or save it to your library."
+          />
         ) : (
           <ul className="divide-y divide-[#1a1a1a]">
-            {rows.map((item) => {
-              const preview =
-                item.prompt_original.length > 60
-                  ? `${item.prompt_original.slice(0, 60)}…`
-                  : item.prompt_original;
-              return (
-                <li key={item.id} className="flex items-stretch gap-0">
+            {rows.map((item) => (
+              <li key={item.id} className="flex items-stretch gap-0">
+                <button
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  className={`min-w-0 flex-1 px-3 py-2.5 text-left transition hover:bg-[#141414] ${
+                    selectedId && item.id === selectedId ? 'bg-[#141414]' : ''
+                  }`}
+                >
+                  <p className="line-clamp-2 text-[13px] leading-snug text-[#ccc]">
+                    {previewPrompt(item.prompt_original)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[#808088]">
+                    {item.mode} · {formatHistoryTime(item.created_at)}
+                  </p>
+                </button>
+                {userId?.trim() && !item.id.startsWith('lib-') ? (
                   <button
                     type="button"
-                    onClick={() => onSelect(item)}
-                    className={`min-w-0 flex-1 px-3 py-2.5 text-left transition hover:bg-[#141414] ${
-                      selectedId && item.id === selectedId ? 'bg-[#141414]' : ''
-                    }`}
+                    aria-label="Delete from history"
+                    title="Delete from history"
+                    disabled={deletingId === item.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void removeItem(item.id);
+                    }}
+                    className="shrink-0 px-2.5 py-2 text-[#555] transition hover:bg-[#1a1a1a] hover:text-[#e85d5d] disabled:opacity-40"
                   >
-                    <p className="line-clamp-2 text-[13px] leading-snug text-[#ccc]">{preview}</p>
-                    <p className="mt-1 text-[11px] text-[#666]">
-                      {item.mode} · {formatTime(item.created_at)}
-                    </p>
+                    {deletingId === item.id ? (
+                      <span className="text-[11px]">…</span>
+                    ) : (
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    )}
                   </button>
-                  {userId?.trim() && !item.id.startsWith('lib-') ? (
-                    <button
-                      type="button"
-                      aria-label="Delete from history"
-                      title="Delete from history"
-                      disabled={deletingId === item.id}
-                      onClick={(e) => void handleDelete(e, item.id)}
-                      className="shrink-0 px-2.5 py-2 text-[#555] transition hover:bg-[#1a1a1a] hover:text-[#e85d5d] disabled:opacity-40"
-                    >
-                      {deletingId === item.id ? (
-                        <span className="text-[11px]">…</span>
-                      ) : (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          <line x1="10" x2="10" y1="11" y2="17" />
-                          <line x1="14" x2="14" y1="11" y2="17" />
-                        </svg>
-                      )}
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
+                ) : null}
+              </li>
+            ))}
           </ul>
         )}
       </div>

@@ -1,0 +1,75 @@
+name: Database
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/db.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/db.yml'
+  workflow_dispatch:
+
+jobs:
+  migrate-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: promptperfect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/promptperfect_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install pgcrypto + auth stub (ephemeral-only)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          psql "$DATABASE_URL" -f supabase/tests/auth_stub.sql
+
+      - name: Run migrations (idempotent runner)
+        run: node supabase/migrate.js
+
+      - name: Re-run migrations (idempotency gate)
+        run: |
+          node supabase/migrate.js --check
+          echo "✅ No pending migrations after full run (idempotent)."
+
+      - name: Seed fixtures
+        run: psql "$DATABASE_URL" -f supabase/tests/seed.sql
+
+      - name: Verify schema / constraints / RLS
+        run: node supabase/tests/verify.js
+
+      - name: Schema-diff guard (unrecorded DDL check)
+        run: |
+          # Fails if a PR edits legacy setup scripts instead of migrations/.
+          if git diff --name-only "origin/${{ github.base_ref || 'main' }}" -- supabase/setup.sql supabase/run-all.sql supabase/SETUP_SHARE_FEATURE.sql supabase/fix_model_column.sql | grep -q .; then
+            echo "⚠️ Legacy setup scripts changed. New schema must go in supabase/migrations/ (see ADR-0004)."
+            echo "   If the change is only the DEPRECATED header, ignore this warning."
+          fi

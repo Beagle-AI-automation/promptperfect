@@ -44,3 +44,11 @@ next-env.d.ts
 .env
 .env.local
 .env*.local
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Playwright MCP browser artifacts
+/.playwright-mcp/

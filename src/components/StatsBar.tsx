@@ -1,7 +1,9 @@
 'use client';
 
-import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { BarChart3, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { createSupabaseBrowserClient } from '@/lib/client/supabaseBrowser';
 import { getPromptPerfectAuthHeaders } from '@/lib/client/promptPerfectAuthHeaders';
 import {
@@ -40,7 +42,7 @@ function sleep(ms: number): Promise<void> {
 
 function StatLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#71717A]">
+    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#8a8a8a]">
       {children}
     </span>
   );
@@ -200,8 +202,37 @@ export function StatsBar({
 
   if (loading) {
     return (
-      <div className={shellClass}>
-        <span className="text-sm text-[#71717A]">Loading analytics…</span>
+      <div className={shellClass} role="region" aria-label="Analytics" aria-busy="true">
+        <span className="sr-only">Loading analytics…</span>
+        <div className="grid w-full grid-cols-1 divide-y divide-[#252525] md:grid-cols-3 md:divide-x md:divide-y-0">
+          <div className="flex items-center gap-6 pb-4 md:pb-0 md:pr-6">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-6 w-12" />
+            </div>
+            <div className="ml-auto flex items-center gap-5">
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-6 w-10" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-6 w-10" />
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 py-4 md:py-0 md:px-6">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-6 w-16" />
+          </div>
+          <div className="flex flex-col gap-2 pt-4 md:py-0 md:pl-6">
+            <Skeleton className="h-3 w-20" />
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-7 w-16" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -232,9 +263,12 @@ export function StatsBar({
   if (entirelyEmpty) {
     return (
       <div className={shellClass}>
-        <p className="text-center text-sm leading-relaxed text-[#71717A]">
-          Analytics will appear here after you run optimizations and submit feedback.
-        </p>
+        <EmptyState
+          compact
+          icon={BarChart3}
+          title="No analytics yet"
+          description="Analytics will appear here after you run optimizations and submit feedback."
+        />
       </div>
     );
   }

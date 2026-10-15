@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { getSupabaseAdminClient } from '@/lib/server/supabase';
 import { createRouteHandlerClient } from '@/lib/server/supabase';
+import { parseClaimGuestHistoryBody } from '@/lib/apiSchemas';
+import { logWarn } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -19,26 +21,11 @@ export async function POST(request: Request) {
       string,
       unknown
     > | null;
-    const guestId =
-      typeof body?.guestId === 'string' ? body.guestId.trim() : '';
-    const targetSessionId =
-      typeof body?.targetSessionId === 'string'
-        ? body.targetSessionId.trim()
-        : '';
-
-    const isValidGuestId =
-      guestId.length > 0 &&
-      guestId.length <= 80 &&
-      // Accept UUID format (e.g. crypto.randomUUID()) or legacy 'guest_' / 'guest-' prefixed IDs
-      (/^[0-9a-f-]{36}$/i.test(guestId) || guestId.startsWith('guest'));
-    if (
-      !isValidGuestId ||
-      !targetSessionId ||
-      targetSessionId.length > 200 ||
-      guestId === targetSessionId
-    ) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    const parsed = parseClaimGuestHistoryBody(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+    const { guestId, targetSessionId } = parsed.value;
 
     const admin = getSupabaseAdminClient();
     if (!admin) {
@@ -50,16 +37,17 @@ export async function POST(request: Request) {
       user_id: userId,
     };
 
+    // Only unclaimed rows can be adopted: a signed-in user must never be able
+    // to pull history that already belongs to someone else.
     const { data, error } = await admin
       .from('pp_optimization_history')
       .update(updates)
       .eq('session_id', guestId)
+      .is('user_id', null)
       .select('id');
 
     if (error) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('[claim-guest-history]', error);
-      }
+      logWarn('claim-guest-history', `claim failed: ${error.message}`);
       return NextResponse.json({ error: 'Update failed' }, { status: 500 });
     }
 
@@ -70,11 +58,8 @@ export async function POST(request: Request) {
 
     if (delErr) {
       const msg = String(delErr.message || '');
-      if (
-        !/does not exist|could not find|schema cache/i.test(msg) &&
-        process.env.NODE_ENV !== 'production'
-      ) {
-        console.warn('[claim-guest-history] guest_usage cleanup:', msg);
+      if (!/does not exist|could not find|schema cache/i.test(msg)) {
+        logWarn('claim-guest-history', `guest_usage cleanup: ${msg}`);
       }
     }
 
@@ -83,9 +68,10 @@ export async function POST(request: Request) {
       migrated: data?.length ?? 0,
     });
   } catch (e) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[claim-guest-history]', e);
-    }
+    logWarn(
+      'claim-guest-history',
+      `request failed: ${e instanceof Error ? e.message : 'Invalid request'}`,
+    );
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 }

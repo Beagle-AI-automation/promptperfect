@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { RootErrorBoundary } from "@/components/RootErrorBoundary";
-import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -31,21 +30,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('promptperfect-theme');var s=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';var r=t==='dark'||t==='light'?t:s;document.documentElement.classList.add(r);})();`,
-          }}
-        />
-      </head>
+    <html lang="en" className="dark">
       <body
         className={`${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
-        suppressHydrationWarning
       >
-        <RootErrorBoundary>
-          <ThemeProvider>{children}</ThemeProvider>
-        </RootErrorBoundary>
+        <RootErrorBoundary>{children}</RootErrorBoundary>
       </body>
     </html>
   );

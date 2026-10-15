@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdminClient } from '@/lib/client/supabase';
+import { getSupabaseAdminClient } from '@/lib/server/supabase';
 import {
   getDbForIdentity,
   jsonUnauthorizedDetails,
   resolveIdentity,
 } from '@/lib/server/supabaseRequestIdentity';
+import { logWarn } from '@/lib/logger';
+import { enforceRateLimit } from '@/lib/auth/rateLimit';
+
+/**
+ * Authenticated, but the rows carry `prompt_original` and `prompt_optimized`
+ * in full, so a single page is an expensive read. 60/min covers the UI
+ * refreshing the panel without letting a session pull the table down.
+ */
+const HISTORY_RATE_LIMIT = 60;
 
 const ROW_SELECT_FULL =
   'id,session_id,optimize_session_id,prompt_original,prompt_optimized,mode,explanation,created_at';
@@ -25,6 +34,12 @@ type HistoryListRow = {
 };
 
 export async function GET(request: Request) {
+  // Throttle before resolving identity: verifying the JWT costs a Supabase
+  // round trip, so a flood of unauthenticated requests would otherwise spend
+  // that budget before ever reaching the limiter.
+  const limited = enforceRateLimit('history', request, HISTORY_RATE_LIMIT);
+  if (limited) return limited;
+
   const identity = await resolveIdentity(request);
   if (!identity) {
     return NextResponse.json(await jsonUnauthorizedDetails(request), {
@@ -65,7 +80,7 @@ export async function GET(request: Request) {
   }
 
   if (error) {
-    console.error('[history GET]', error.message);
+    logWarn('history', `GET failed: ${error.message}`);
     return NextResponse.json(
       { error: 'Could not load history', code: 'HISTORY_DB_ERROR' },
       { status: 500 },
@@ -179,7 +194,7 @@ export async function POST(request: Request) {
     break;
   }
 
-  console.error('[history POST]', lastError?.message ?? 'Insert failed');
+  logWarn('history', `POST failed: ${lastError?.message ?? 'Insert failed'}`);
   return NextResponse.json(
     { error: 'Could not save history', code: 'HISTORY_INSERT_ERROR' },
     { status: 500 },
@@ -238,7 +253,7 @@ export async function DELETE(request: Request) {
   const { data: hist, error: histErr } = histQuery;
 
   if (histErr) {
-    console.error('[history DELETE fetch]', histErr.message);
+    logWarn('history', `DELETE fetch failed: ${histErr.message}`);
     return NextResponse.json(
       { error: 'Database error', code: 'HISTORY_FETCH_ERROR' },
       { status: 500 },
@@ -266,7 +281,7 @@ export async function DELETE(request: Request) {
       .delete()
       .in('session_id', [...sessionKeys]);
     if (logDelErr) {
-      console.error('[history DELETE logs]', logDelErr.message);
+      logWarn('history', `DELETE logs failed: ${logDelErr.message}`);
       return NextResponse.json(
         { error: 'Database error', code: 'FEEDBACK_LOG_DELETE_ERROR' },
         { status: 500 },
@@ -292,14 +307,14 @@ export async function DELETE(request: Request) {
       .eq('optimized_prompt', hist.prompt_optimized);
 
     if (delByContent.error) {
-      console.error('[history DELETE library]', delByContent.error.message);
+      logWarn('history', `DELETE library failed: ${delByContent.error.message}`);
       return NextResponse.json(
         { error: 'Database error', code: 'LIBRARY_DELETE_ERROR' },
         { status: 500 },
       );
     }
   } else if (delByLink.error) {
-    console.error('[history DELETE library]', delByLink.error.message);
+    logWarn('history', `DELETE library failed: ${delByLink.error.message}`);
     return NextResponse.json(
       { error: 'Database error', code: 'LIBRARY_DELETE_ERROR' },
       { status: 500 },
@@ -313,7 +328,7 @@ export async function DELETE(request: Request) {
     .eq('user_id', identity.userId);
 
   if (delHistErr) {
-    console.error('[history DELETE row]', delHistErr.message);
+    logWarn('history', `DELETE row failed: ${delHistErr.message}`);
     return NextResponse.json(
       { error: 'Database error', code: 'HISTORY_DELETE_ERROR' },
       { status: 500 },

@@ -36,6 +36,27 @@ test(PP-508): add API route integration tests
 - All tests must pass (`npx vitest run`)
 - No TypeScript errors (`npx tsc --noEmit`)
 
+## Tests must not depend on your machine
+
+Vitest loads `.env.local` in addition to `.env`, so a local flag such as
+`NEXT_PUBLIC_UNLIMITED_MODE=true` (or a local `GEMINI_MODEL` override) would
+otherwise change behaviour inside the suite: tests pass in CI and fail on the
+machine that wrote them. `vitest.setup.ts` therefore clears every
+behaviour-changing variable (feature flags, quotas, model ids, provider keys)
+before any test module is imported, so tests always observe the documented
+production defaults.
+
+Practical rules when adding tests:
+
+- Never assert against a value that only exists in `.env.local`.
+- Stub what a test needs (`vi.stubEnv(...)` / `process.env`), and restore it.
+- Mocking a module? Prefer `importOriginal` and override just the members you
+  need — a bare `vi.mock` factory breaks the moment the module gains an export.
+- Give a request its own `x-forwarded-for` IP when a test asserts rate-limit
+  behaviour, and call `resetRateLimits()` in `beforeEach` for real-limiter tests.
+- `src/test/envDefaults.test.ts` locks these defaults in; if it fails, a new
+  environment dependency has crept back in.
+
 ## Code Style
 
 - TypeScript strict mode

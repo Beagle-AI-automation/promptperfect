@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { Share2, Check, Copy } from 'lucide-react';
 import { SignInRequiredModal } from '@/components/SignInRequiredModal';
+import { isUnlimitedMode } from '@/lib/localMode';
+import { copyText } from '@/lib/clipboard';
+import { getAllLocalHistory } from '@/lib/client/optimizationHistory';
 
 interface ShareButtonProps {
   historyId: string;
@@ -19,6 +22,19 @@ export function ShareButton({ historyId, userId, disabled = false }: ShareButton
   const [showSignInModal, setShowSignInModal] = useState(false);
 
   const handleShare = async () => {
+    // Local mode without backend: copy the optimized text straight away.
+    if ((!userId || historyId.startsWith('local-')) && isUnlimitedMode()) {
+      const row = getAllLocalHistory().find((r) => r.id === historyId);
+      const text = row
+        ? `${row.prompt_optimized}${row.explanation.trim() ? `\n\n${row.explanation.trim()}` : ''}`
+        : '';
+      if (text.trim()) {
+        await copyToClipboard(text);
+        return;
+      }
+      // fall through to sign-in modal when the local row is gone
+    }
+
     // Guest or local-only history — show sign-in modal immediately.
     if (!userId || historyId.startsWith('local-')) {
       setShowSignInModal(true);
@@ -61,11 +77,10 @@ export function ShareButton({ historyId, userId, disabled = false }: ShareButton
   };
 
   const copyToClipboard = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       setError('Failed to copy to clipboard');
     }
   };

@@ -1,23 +1,32 @@
 # PromptPerfect
 
-> Open-source prompt optimization tool that automatically improves your LLM prompts and explains the changes. Supports GPT-4, Claude, and Gemini. Bring your own API key — it never leaves your browser.
+> Open-source prompt optimization tool that automatically improves your LLM prompts and explains the changes. Providers: Google Gemini (default), OpenAI (incl. GPT-6 Astra with reasoning effort), Anthropic. Keys via server env or per-request BYOK (never persisted).
 
 ## Documentation
 
-- [Try PromptPerfect](https://promptperfect-xyz.vercel.app): Use it in your browser — no install needed
+- [Try PromptPerfect](https://promptperfect-beaglecorp.vercel.app): Use it in your browser — no install needed
 - [GitHub](https://github.com/Beagle-AI-automation/promptperfect): Source code, setup instructions, contributing guide
-- [API Route](https://github.com/Beagle-AI-automation/promptperfect#api): POST /api/optimize endpoint docs
+- [API Routes](https://github.com/Beagle-AI-automation/promptperfect#api): POST /api/optimize (streaming) and POST /api/optimize-sync (JSON, CORS allowlisted, extension-compatible) endpoint docs
 
 ## Optimization Modes
 
 - Better: General-purpose prompt improvement with explanations
 - Specific: Adds constraints, types, edge cases for technical prompts
 - Chain-of-Thought: Restructures prompts for step-by-step reasoning
+- Developer / Research / Beginner / Product / Marketing: Domain-tuned rewrites
+- Production Audit: Link a project directory (analyzed locally in the browser) and get the integral master prompt for production readiness
+
+## Features
+
+- Template Library: 60 production-ready prompt templates across 60 categories, forkable into the optimizer with one click; works offline
+- Prompt Library: Save, search, filter, re-optimize and share prompts (Supabase backend or localStorage fallback)
+- Result enrichments: heuristic quality score + checklist, {{PLACEHOLDER}} guard, token/cost estimates, Markdown download
+- Guest quota (5 free, configurable) with local-dev unlimited mode; Supabase Auth (email + Google OAuth)
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
-- Vercel AI SDK (streaming)
-- Tailwind CSS + shadcn/ui
-- Supabase (feedback tracking)
-- TypeScript
+- Next.js 16 (App Router)
+- Vercel AI SDK (streaming + generateText)
+- Tailwind CSS 4
+- Supabase (auth, history, library, analytics)
+- TypeScript (strict), Vitest, ESLint

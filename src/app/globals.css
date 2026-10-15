@@ -1,12 +1,39 @@
 @import "tailwindcss";
-@custom-variant dark (&&:where(.dark, .dark *));
-
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ---------------------------------------------------------------------------
+   Global design tokens (dark-only product).
+   Values match the existing palette exactly so nothing shifts; they are just
+   centralized here so components reference semantic tokens instead of raw hex.
+--------------------------------------------------------------------------- */
 :root {
+  /* surfaces */
   --background: #050505;
   --foreground: #ececec;
+  --card: #0a0a0a;
+  --card-foreground: #ececec;
+  --popover: #0d0d0d;
+  --popover-foreground: #ececec;
+
+  /* brand + states */
   --accent: #4552ff;
+  --accent-foreground: #ffffff;
+  --accent-hover: #5b6cff;
+  --ring: #4552ff;
+
+  /* lines + inputs */
+  --border: #252525;
+  --input: #252525;
+  --muted: #0f0f0f;
+  --muted-foreground: #8a8a8a;
+
+  /* radiuses */
+  --radius: 0.5rem;
+
+  /* Text-safe accent: the brand #4552ff fails AA as small text on dark
+     backgrounds, so links/inline-accent text use this lighter variant while
+     buttons keep the true brand accent via bg-accent. */
+  --accent-text: #8b93ff;
 }
 
 .font-heading {
@@ -16,20 +43,27 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-text: var(--accent-text);
+  /* AA-tuned muted greys (Tailwind's zinc-500/600 sit ~4.0:1 on near-black). */
+  --color-zinc-500: #8a8a8a;
+  --color-zinc-600: #7f7f88;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
   --font-sans: var(--font-space-grotesk), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-:root.dark {
-  --background: #050505;
-  --foreground: #ececec;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --background: #050505;
-    --foreground: #ececec;
-  }
 }
 
 @keyframes fade-in {
@@ -63,6 +97,34 @@ body {
   color: var(--foreground);
   font-family: var(--font-space-grotesk), var(--font-geist-sans), system-ui, sans-serif;
   overflow-x: hidden;
+}
+
+/* Brand gradient CTA background — single source of truth for the signature
+   button gradient, replacing the repeated Tailwind arbitrary value. */
+.cta-gradient {
+  background-image: linear-gradient(135deg, #4552ff, #5c6aff);
+}
+
+/* Global visible focus indicator for keyboard users. Component-level
+   focus-visible styling (e.g. Button's ring) still wins by specificity,
+   so only previously unfocusable-looking elements (links, plain inputs)
+   gain a consistent accent outline. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Respect users who prefer reduced motion: collapse entrance animations,
+   transitions, and smooth scrolling so the UI stays usable and calm. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Smooth scrolling for all scrollable elements */

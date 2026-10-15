@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { createRouteHandlerClient } from '@/lib/server/supabase';
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key =
-    process.env.SUPABASE_SERVICE_KEY?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+import {
+  createRouteHandlerClient,
+  getSupabaseAdminClient,
+} from '@/lib/server/supabase';
+import { logWarn } from '@/lib/logger';
+import { parseSaveHistoryBody } from '@/lib/apiSchemas';
 
 export async function POST(request: Request) {
   const routeSupabase = await createRouteHandlerClient();
@@ -21,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const admin = getAdminClient();
+  const admin = getSupabaseAdminClient();
   if (!admin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
@@ -34,19 +29,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const b = body as Record<string, unknown>;
-  const session_id = typeof b.session_id === 'string' ? b.session_id.trim() : '';
-  const prompt_original = typeof b.prompt_original === 'string' ? b.prompt_original : '';
-  const prompt_optimized = typeof b.prompt_optimized === 'string' ? b.prompt_optimized : '';
-  const mode = typeof b.mode === 'string' ? b.mode : 'better';
-  const explanation = typeof b.explanation === 'string' ? b.explanation : '';
-  const provider = typeof b.provider === 'string' ? b.provider : null;
-  const optimize_session_id = typeof b.optimize_session_id === 'string' ? b.optimize_session_id : null;
-  const user_id = user.id;
-
-  if (!session_id || !prompt_original || !prompt_optimized) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  const parsed = parseSaveHistoryBody(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
+  const {
+    session_id,
+    prompt_original,
+    prompt_optimized,
+    mode,
+    explanation,
+    provider,
+    optimize_session_id,
+  } = parsed.value;
+  const user_id = user.id;
 
   // Ensure app users row exists before writing user_id FK (upsert if needed)
   const { data: existingUser } = await admin
@@ -104,6 +100,6 @@ export async function POST(request: Request) {
     break;
   }
 
-  console.error('[save-history POST]', lastError?.message ?? 'Insert failed');
+  logWarn('save-history', `POST failed: ${lastError?.message ?? 'Insert failed'}`);
   return NextResponse.json({ error: 'Could not save history' }, { status: 500 });
 }

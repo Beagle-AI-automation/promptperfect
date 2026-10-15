@@ -5,37 +5,56 @@ import { normalizeModeForDb, parsePromptScore } from '@/lib/optimization-logs';
 import { userFacingOptimizeError } from '@/lib/optimizeUserError';
 import { createProvider } from '@/lib/providers';
 import { getSystemPrompt } from '@/lib/prompts';
-import type { OptimizeMode } from '@/lib/prompts';
-import { getSupabaseClient } from '@/lib/supabase';
+import { parseOptimizeBody } from '@/lib/apiSchemas';
+import { getServiceClient } from '@/lib/server/supabase';
+import { getRequestId, logApi, logWarn } from '@/lib/logger';
+import { enforceRateLimit } from '@/lib/auth/rateLimit';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
+
+/**
+ * Public streaming endpoint. Without a BYOK key it falls back to the server's
+ * own provider key, so an unauthenticated caller can otherwise burn the
+ * project's LLM quota one request at a time. Throttle per IP before any
+ * provider work happens.
+ */
+const OPTIMIZE_RATE_LIMIT = 20;
 
 export async function POST(request: Request) {
+  const started = Date.now();
+  const requestId = getRequestId(request);
+  const res = await handlePost(request);
+  // For streams this measures time-to-first-byte, not full completion.
+  logApi('optimize', {
+    status: res.status,
+    ms: Date.now() - started,
+    requestId,
+  });
+  return res;
+}
+
+async function handlePost(request: Request) {
+  const limited = enforceRateLimit('optimize', request, OPTIMIZE_RATE_LIMIT);
+  if (limited) return limited;
+
   try {
-    const body = (await request.json()) as {
-      prompt?: string;
-      text?: string;
-      mode?: OptimizeMode | string;
-      apiKey?: string;
-      session_id?: string;
-      provider?: string;
-    };
-
-    const promptRaw =
-      typeof body.text === 'string' && body.text.trim()
-        ? body.text.trim()
-        : typeof body.prompt === 'string'
-          ? body.prompt.trim()
-          : '';
-
-    if (!promptRaw) {
-      return Response.json({ error: 'Missing or empty prompt' }, { status: 400 });
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return Response.json({ error: 'Invalid request body' }, { status: 400 });
     }
-
-    const { mode = 'better', apiKey, session_id } = body;
-    const sessionId =
-      typeof session_id === 'string' ? session_id.trim() : '';
-    const modeStr = typeof mode === 'string' ? mode : 'better';
+    const parsed = parseOptimizeBody(rawBody);
+    if (!parsed.ok) {
+      return Response.json({ error: parsed.error }, { status: 400 });
+    }
+    const {
+      prompt: promptRaw,
+      mode: modeStr,
+      apiKey,
+      sessionId,
+    } = parsed.value;
     const dbMode = normalizeModeForDb(modeStr);
 
     let model;
@@ -69,7 +88,7 @@ export async function POST(request: Request) {
           const promptScore = parsePromptScore(text);
 
           if (sessionId) {
-            const supabase = getSupabaseClient();
+            const supabase = getServiceClient();
             if (supabase) {
               void supabase.from('optimization_logs').insert({
                 session_id: sessionId,
@@ -85,18 +104,20 @@ export async function POST(request: Request) {
             }
           }
         } catch (logErr) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.error('[api/optimize] onFinish logging error:', logErr);
-          }
+          logWarn(
+            'optimize',
+            `onFinish logging error: ${logErr instanceof Error ? logErr.message : String(logErr)}`,
+          );
         }
       },
     });
 
     return result.toTextStreamResponse();
   } catch (err) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[api/optimize]', err);
-    }
+    logWarn(
+      'optimize',
+      `request failed: ${err instanceof Error ? err.message : 'Invalid request'}`,
+    );
     return Response.json(
       { error: userFacingOptimizeError(err) },
       { status: 500 },

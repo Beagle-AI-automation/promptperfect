@@ -1,62 +1,75 @@
 # Share Feature Setup
 
-## Quick Start (Automated)
+> Current flow (migrations-based). The legacy one-shot scripts
+> (`SETUP_SHARE_FEATURE.sql`, old `migrate.js` behavior) are deprecated —
+> use the commands below. Full backend reference: `supabase/README.md`.
 
-Run this single command to set up the database:
+## Quick Start
 
 ```bash
-npm run db:migrate
+# Direct Postgres connection string (Supabase Dashboard → Database → Connection string,
+# or a local ephemeral DB — see supabase/README.md)
+export DATABASE_URL='postgresql://postgres:password@db.<ref>.supabase.co:5432/postgres'
+
+npm run db:migrate   # creates pp_optimization_history + all indexes/policies (idempotent)
+npm run db:verify    # asserts share_id index, RLS policies, constraint guards
 ```
 
-This will automatically create the `pp_optimization_history` table with all necessary indexes.
+## What this creates
 
-## What This Does
-
-The migration creates:
-- `pp_optimization_history` table for storing optimizations
-- `share_id` column for generating shareable URLs
-- Indexes for fast queries on `session_id`, `share_id`, and `created_at`
+- `pp_optimization_history` table (`session_id`, `prompt_original`, `prompt_optimized`,
+  `mode`, `explanation`, `share_id` UNIQUE, `user_id`, `provider`, `optimize_session_id`)
+- Indexes on `session_id`, `share_id` (partial, non-null), `created_at DESC`,
+  `(user_id, created_at)` for history timelines
+- RLS: `anon` INSERT guarded by payload checks (mode allowlist + length bounds),
+  open SELECT for guest history + share-link views, owner-only SELECT/UPDATE for
+  authenticated users (see `docs/adr/0005-rls-patterns.md`)
+- `CHECK` payload bounds (prompts ≤ 60000 chars, `share_id` 6–64 chars)
 
 ## Prerequisites
 
-Make sure your `.env` file has these variables:
+`.env.local` needs (see `.env.example`):
+
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_service_role_key
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+SUPABASE_SERVICE_ROLE_KEY=<service_role key>   # server-side only, never NEXT_PUBLIC_*
+DATABASE_URL=postgresql://postgres:password@db.<ref>.supabase.co:5432/postgres
 ```
 
-## Manual Setup (Alternative)
-
-If the automated script doesn't work, you can run the migration manually:
-
-1. Go to your Supabase Dashboard SQL Editor
-2. Run the SQL from `supabase/SETUP_SHARE_FEATURE.sql`
+`DATABASE_URL` is required for DDL (`db:migrate`); the anon/service keys alone
+cannot create tables.
 
 ## Testing the Share Feature
 
-1. Start the dev server: `npm run dev`
-2. Go to http://localhost:3000
-3. Enter a prompt and click "Optimize"
-4. After optimization completes, you should see a **Share** button
-5. Click it to generate a shareable URL
-6. Visit the URL in a private/incognito window to see the public view
+1. `npm run dev` → http://localhost:3000
+2. Enter a prompt → **Optimize**
+3. After completion, the **Share** button appears (row persisted with `historyId`)
+4. Click Share → unique `share_id` → URL `/s/{share_id}`
+5. Open the URL in incognito → public read-only view (no login)
+
+Local-dev fixtures: `psql "$DATABASE_URL" -f supabase/tests/seed.sql` inserts a
+shareable row (`share_id = seedshare01` → `/s/seedshare01`).
 
 ## Troubleshooting
 
 **Share button not appearing?**
-- Make sure the migration ran successfully
-- Check that your Supabase credentials are correct in `.env`
-- Try running `npm run db:migrate` again
+- `npm run db:migrate` then `npm run db:verify` — both must be green
+- Check Supabase credentials in `.env.local`
+- `pp_optimization_history` missing `share_id`? You ran the deprecated script —
+  re-run `db:migrate` (adds the column idempotently)
 
 **Migration failed?**
-- Verify your `SUPABASE_SERVICE_KEY` (service_role key, not anon key)
-- Check that your Supabase project is accessible
-- Try the manual setup method above
+- A failed file rolls back fully and stays pending — fix forward with a new
+  migration, then re-run `db:migrate`
+- `role "anon" does not exist` on local Postgres → apply
+  `supabase/tests/auth_stub.sql` first (ephemeral-only; never on Supabase)
 
 ## How It Works
 
-1. When an optimization completes, it's saved to `pp_optimization_history`
-2. The Share button appears with the saved `historyId`
-3. Clicking Share generates a unique 10-character `share_id`
-4. The share URL format: `yoursite.com/s/{share_id}`
-5. Anyone with the link can view the optimization (read-only)
+1. Optimization completes → row saved to `pp_optimization_history`
+2. Share button appears with the saved `historyId`
+3. Clicking Share generates a unique `share_id` (`/api/share/generate`)
+4. Share URL `/s/{share_id}` renders the public view (read-only)
+5. On signup, guest rows are claimed to the account (`claim-guest-history`;
+   see `docs/adr/0006-guest-usage-tracking.md`)

@@ -45,7 +45,7 @@ export default function DocsPage() {
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
           <Link
             href="/"
-            className="text-sm font-semibold text-[#ECECEC] transition-colors hover:text-[#4552FF]"
+            className="text-sm font-semibold text-[#ECECEC] transition-colors hover:text-accent-text"
           >
             ← PromptPerfect
           </Link>
@@ -53,7 +53,7 @@ export default function DocsPage() {
             href="https://beaglecorp.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[#4552FF] hover:underline"
+            className="text-sm text-accent-text hover:underline"
           >
             Beagle
           </a>
@@ -62,7 +62,7 @@ export default function DocsPage() {
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="border-b border-zinc-800 pb-8">
-          <p className="text-xs font-medium uppercase tracking-wider text-[#4552FF]">API</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-accent-text">API</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#ECECEC] sm:text-4xl">
             Reference
           </h1>
@@ -83,7 +83,7 @@ export default function DocsPage() {
               <li key={href}>
                 <a
                   href={href}
-                  className="text-sm text-[#4552FF] underline-offset-2 hover:underline"
+                  className="text-sm text-accent-text underline-offset-2 hover:underline"
                 >
                   {label}
                 </a>
@@ -104,7 +104,7 @@ export default function DocsPage() {
               <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
                 <dt className="shrink-0 font-medium text-[#ECECEC]">Base URL</dt>
                 <dd>
-                  <code className="break-all rounded bg-zinc-900 px-2 py-0.5 text-[#4552FF]">
+                  <code className="break-all rounded bg-zinc-900 px-2 py-0.5 text-accent-text">
                     {BASE}
                   </code>
                 </dd>
@@ -169,7 +169,7 @@ export default function DocsPage() {
                 <tbody className="text-zinc-300">
                   <tr className="border-b border-zinc-800 bg-zinc-900/30">
                     <th className="px-3 py-2.5 font-medium text-[#ECECEC] sm:px-4">URL</th>
-                    <td className="px-3 py-2.5 font-mono text-xs text-[#4552FF] sm:px-4 sm:text-sm">
+                    <td className="px-3 py-2.5 font-mono text-xs text-accent-text sm:px-4 sm:text-sm">
                       /api/optimize-sync
                     </td>
                   </tr>
@@ -301,21 +301,21 @@ print(data["changes"])`}</DocsCodeBlock>
             </p>
             <ul className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-300">
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                <span className="font-mono text-[#4552FF]">better</span>
+                <span className="font-mono text-accent-text">better</span>
                 <div className="mt-2 text-zinc-400">
                   General upgrade: clearer, more effective wording while keeping the user&apos;s intent.
                   Good default when you are not sure which lens to use.
                 </div>
               </li>
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                <span className="font-mono text-[#4552FF]">specific</span>
+                <span className="font-mono text-accent-text">specific</span>
                 <div className="mt-2 text-zinc-400">
                   Pushes for constraints, audience, format, success criteria, edge cases, and measurable
                   outcomes so the model has less room to guess.
                 </div>
               </li>
               <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                <span className="font-mono text-[#4552FF]">cot</span>
+                <span className="font-mono text-accent-text">cot</span>
                 <div className="mt-2 text-zinc-400">
                   Chain-of-thought style: encourages step-by-step reasoning, checking intermediate
                   steps, or &quot;think through X before Y&quot; without pointless bloat.
@@ -359,13 +359,13 @@ print(data["changes"])`}</DocsCodeBlock>
             </p>
 
             <article className="mt-8 space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-5">
-              <h3 className="text-sm font-semibold text-[#4552FF]">1 · mode: better</h3>
+              <h3 className="text-sm font-semibold text-accent-text">1 · mode: better</h3>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Before</p>
               <blockquote className="border-l-2 border-zinc-600 pl-3 text-sm italic text-zinc-400">
                 write something for linkedin about our launch
               </blockquote>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">After (excerpt)</p>
-              <blockquote className="border-l-2 border-[#4552FF]/60 pl-3 text-sm text-zinc-300">
+              <blockquote className="border-l-2 border-accent/60 pl-3 text-sm text-zinc-300">
                 Draft a LinkedIn post announcing our product launch. Audience: professionals in [industry].
                 Tone: confident and concise. Include: what we built, the problem it solves, one concrete
                 outcome, and a single CTA (e.g. waitlist or demo). Under 200 words.
@@ -373,13 +373,13 @@ print(data["changes"])`}</DocsCodeBlock>
             </article>
 
             <article className="mt-8 space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-5">
-              <h3 className="text-sm font-semibold text-[#4552FF]">2 · mode: specific</h3>
+              <h3 className="text-sm font-semibold text-accent-text">2 · mode: specific</h3>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Before</p>
               <blockquote className="border-l-2 border-zinc-600 pl-3 text-sm italic text-zinc-400">
                 help me debug my app
               </blockquote>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">After (excerpt)</p>
-              <blockquote className="border-l-2 border-[#4552FF]/60 pl-3 text-sm text-zinc-300">
+              <blockquote className="border-l-2 border-accent/60 pl-3 text-sm text-zinc-300">
                 I have a bug in my app. Stack: [framework + version]. Symptom: [expected vs actual].
                 Steps to reproduce: 1) … 2) … Relevant code (minimal): [paste]. Error logs / stack trace:
                 [paste]. What I already tried: [list]. Please suggest the most likely root causes and
@@ -388,13 +388,13 @@ print(data["changes"])`}</DocsCodeBlock>
             </article>
 
             <article className="mt-8 space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-5">
-              <h3 className="text-sm font-semibold text-[#4552FF]">3 · mode: cot</h3>
+              <h3 className="text-sm font-semibold text-accent-text">3 · mode: cot</h3>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Before</p>
               <blockquote className="border-l-2 border-zinc-600 pl-3 text-sm italic text-zinc-400">
                 Is this pricing fair for a B2B SaaS?
               </blockquote>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">After (excerpt)</p>
-              <blockquote className="border-l-2 border-[#4552FF]/60 pl-3 text-sm text-zinc-300">
+              <blockquote className="border-l-2 border-accent/60 pl-3 text-sm text-zinc-300">
                 Evaluate whether this B2B SaaS pricing is reasonable. First, list the assumptions you need
                 (ICP, ACV, competitors, value metric). Then reason step-by-step: compare to comparable
                 tiers, note risks (churn, discounting, expansion). Finally, give a concise verdict with
@@ -420,7 +420,7 @@ print(data["changes"])`}</DocsCodeBlock>
 
         <footer className="mt-16 border-t border-zinc-800 pt-8 text-center text-xs text-zinc-500">
           PromptPerfect API docs ·{' '}
-          <Link href="/" className="text-[#4552FF] hover:underline">
+          <Link href="/" className="text-accent-text underline">
             Home
           </Link>
         </footer>

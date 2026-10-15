@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './route';
 
-const { mockGetUser, mockFrom, mockInsert, mockCreateClient } = vi.hoisted(
+const { mockGetUser, mockFrom, mockGetAdminClient } = vi.hoisted(
   () => {
-    const mockInsert = vi.fn();
     const mockSingle = vi
       .fn()
       .mockResolvedValue({ data: { id: 'hist-1' }, error: null });
@@ -26,8 +25,7 @@ const { mockGetUser, mockFrom, mockInsert, mockCreateClient } = vi.hoisted(
     return {
       mockGetUser: vi.fn(),
       mockFrom,
-      mockInsert,
-      mockCreateClient: vi.fn(),
+      mockGetAdminClient: vi.fn(),
     };
   },
 );
@@ -36,10 +34,7 @@ vi.mock('@/lib/server/supabase', () => ({
   createRouteHandlerClient: vi.fn(async () => ({
     auth: { getUser: mockGetUser },
   })),
-}));
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: (...args: unknown[]) => mockCreateClient(...args),
+  getSupabaseAdminClient: (...args: unknown[]) => mockGetAdminClient(...args),
 }));
 
 function makeRequest(body: Record<string, unknown>) {
@@ -57,9 +52,7 @@ describe('/api/save-history POST', () => {
       data: { user: { id: 'user-123' } },
       error: null,
     });
-    mockCreateClient.mockReturnValue({ from: mockFrom });
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
+    mockGetAdminClient.mockReturnValue({ from: mockFrom });
   });
 
   it('returns 401 when not authenticated', async () => {
@@ -82,6 +75,18 @@ describe('/api/save-history POST', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/missing required fields/i);
+  });
+
+  it('returns 503 when the database is not configured', async () => {
+    mockGetAdminClient.mockReturnValueOnce(null);
+    const res = await POST(
+      makeRequest({
+        session_id: 's1',
+        prompt_original: 'a',
+        prompt_optimized: 'b',
+      }),
+    );
+    expect(res.status).toBe(503);
   });
 
   it('returns 200 on valid POST with all fields', async () => {
